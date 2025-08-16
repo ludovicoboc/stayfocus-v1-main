@@ -1,0 +1,179 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { X, Plus } from "lucide-react"
+import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
+
+interface MealRecord {
+  id: string
+  time: string
+  description: string
+  created_at: string
+}
+
+export function RegistroRefeicoes() {
+  const { user } = useAuth()
+  const supabase = createClient()
+  const [records, setRecords] = useState<MealRecord[]>([])
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newRecordTime, setNewRecordTime] = useState("")
+  const [newRecordDescription, setNewRecordDescription] = useState("")
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (user) {
+      fetchRecords()
+    }
+  }, [user])
+
+  const fetchRecords = async () => {
+    if (!user) return
+
+    try {
+      const today = new Date().toISOString().split("T")[0]
+      const { data, error } = await supabase
+        .from("meal_records")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("created_at", `${today}T00:00:00`)
+        .order("time")
+
+      if (error) throw error
+      setRecords(data || [])
+    } catch (error) {
+      console.error("Error fetching records:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const addRecord = async () => {
+    if (!user || !newRecordTime || !newRecordDescription) return
+
+    try {
+      const { data, error } = await supabase
+        .from("meal_records")
+        .insert({
+          user_id: user.id,
+          time: newRecordTime,
+          description: newRecordDescription,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setRecords([...records, data])
+      setNewRecordTime("")
+      setNewRecordDescription("")
+      setShowAddForm(false)
+    } catch (error) {
+      console.error("Error adding record:", error)
+    }
+  }
+
+  const deleteRecord = async (id: string) => {
+    if (!user) return
+
+    try {
+      const { error } = await supabase.from("meal_records").delete().eq("id", id).eq("user_id", user.id)
+
+      if (error) throw error
+
+      setRecords(records.filter((record) => record.id !== id))
+    } catch (error) {
+      console.error("Error deleting record:", error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">Registro de Refeições</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-slate-400">Carregando...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="bg-slate-800 border-slate-700">
+      <CardHeader>
+        <CardTitle className="text-white">Registro de Refeições</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {records.map((record) => (
+          <div key={record.id} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg">
+            <div>
+              <div className="text-white font-medium">
+                {record.time} {record.description}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-slate-400 hover:text-red-400"
+              onClick={() => deleteRecord(record.id)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        ))}
+
+        {showAddForm ? (
+          <div className="border border-slate-600 rounded-lg p-4 space-y-3">
+            <div className="flex space-x-2">
+              <Input
+                type="time"
+                value={newRecordTime}
+                onChange={(e) => setNewRecordTime(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+              <Input
+                placeholder="Descrição da refeição"
+                value={newRecordDescription}
+                onChange={(e) => setNewRecordDescription(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white flex-1"
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                onClick={addRecord}
+                className="bg-green-600 hover:bg-green-700"
+                disabled={!newRecordTime || !newRecordDescription}
+              >
+                Salvar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAddForm(false)
+                  setNewRecordTime("")
+                  setNewRecordDescription("")
+                }}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 border border-dashed border-slate-600"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Registro
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

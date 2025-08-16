@@ -1,0 +1,232 @@
+"use client"
+
+import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Plus, CheckCircle, Circle, Clock, Edit, Trash2 } from "lucide-react"
+import { useEstudos } from "@/hooks/use-estudos"
+import type { SessaoEstudo } from "@/types/estudos"
+
+export function RegistroEstudos() {
+  const { sessoes, adicionarSessao, marcarSessaoCompleta, removerSessao, getEstatisticas } = useEstudos()
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [novaSessao, setNovaSessao] = useState({
+    subject: "",
+    topic: "",
+    duration_minutes: 25,
+    notes: "",
+  })
+
+  const estatisticas = getEstatisticas()
+
+  const handleAddSessao = async () => {
+    if (!novaSessao.subject.trim()) return
+
+    const sessao: Omit<SessaoEstudo, "id" | "user_id" | "created_at" | "updated_at"> = {
+      subject: novaSessao.subject.trim(),
+      topic: novaSessao.topic.trim() || null,
+      duration_minutes: novaSessao.duration_minutes,
+      completed: false,
+      pomodoro_cycles: 0,
+      notes: novaSessao.notes.trim() || null,
+      competition_id: null,
+      started_at: new Date().toISOString(),
+      completed_at: null,
+    }
+
+    const result = await adicionarSessao(sessao)
+    if (result) {
+      setShowAddModal(false)
+      setNovaSessao({
+        subject: "",
+        topic: "",
+        duration_minutes: 25,
+        notes: "",
+      })
+    }
+  }
+
+  const handleToggleComplete = async (sessao: SessaoEstudo) => {
+    if (!sessao.id) return
+
+    if (!sessao.completed) {
+      await marcarSessaoCompleta(sessao.id)
+    }
+  }
+
+  return (
+    <>
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">Registro de Estudos</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-orange-800 rounded-lg p-3">
+              <div className="text-orange-100 text-sm">Sessões Completas</div>
+              <div className="text-orange-100 text-lg font-bold">
+                {estatisticas.sessoesCompletas}/{estatisticas.totalSessoes}
+              </div>
+            </div>
+            <div className="bg-orange-800 rounded-lg p-3">
+              <div className="text-orange-100 text-sm">Tempo Total</div>
+              <div className="text-orange-100 text-lg font-bold">{estatisticas.tempoTotalFormatado}</div>
+            </div>
+          </div>
+
+          {/* Sessions List */}
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {sessoes.slice(0, 5).map((sessao) => (
+              <div
+                key={sessao.id}
+                className="flex items-center justify-between p-3 bg-slate-700 rounded-lg hover:bg-slate-650 transition-colors"
+              >
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => handleToggleComplete(sessao)}
+                    className="text-green-400 hover:text-green-300"
+                    disabled={sessao.completed}
+                  >
+                    {sessao.completed ? <CheckCircle className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                  </button>
+                  <div className="flex-1">
+                    <div
+                      className={`text-sm font-medium ${sessao.completed ? "text-slate-400 line-through" : "text-white"}`}
+                    >
+                      {sessao.subject}
+                      {sessao.topic && ` - ${sessao.topic}`}
+                    </div>
+                    <div className="text-xs text-slate-400 flex items-center">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {sessao.duration_minutes} min
+                      {sessao.pomodoro_cycles > 0 && ` • ${sessao.pomodoro_cycles} ciclos`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex space-x-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-slate-400 hover:text-white"
+                    onClick={() => {
+                      // TODO: Implement edit functionality
+                    }}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-slate-400 hover:text-red-400"
+                    onClick={() => sessao.id && removerSessao(sessao.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add Session Button */}
+          <Button
+            onClick={() => setShowAddModal(true)}
+            className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 border border-dashed border-slate-600"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Sessão de Estudo
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Add Session Dialog */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="bg-slate-800 text-white border-slate-700">
+          <DialogHeader>
+            <DialogTitle>Nova Sessão de Estudo</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="subject" className="text-slate-300">
+                Matéria *
+              </Label>
+              <Input
+                id="subject"
+                placeholder="Ex: Matemática"
+                value={novaSessao.subject}
+                onChange={(e) => setNovaSessao({ ...novaSessao, subject: e.target.value })}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="topic" className="text-slate-300">
+                Tópico (opcional)
+              </Label>
+              <Input
+                id="topic"
+                placeholder="Ex: Álgebra Linear"
+                value={novaSessao.topic}
+                onChange={(e) => setNovaSessao({ ...novaSessao, topic: e.target.value })}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="duration" className="text-slate-300">
+                Duração Planejada (minutos)
+              </Label>
+              <Input
+                id="duration"
+                type="number"
+                value={novaSessao.duration_minutes}
+                onChange={(e) =>
+                  setNovaSessao({ ...novaSessao, duration_minutes: Number.parseInt(e.target.value) || 25 })
+                }
+                className="bg-slate-700 border-slate-600 text-white"
+                min="1"
+                max="480"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="notes" className="text-slate-300">
+                Observações (opcional)
+              </Label>
+              <Textarea
+                id="notes"
+                placeholder="Anotações sobre a sessão de estudo..."
+                value={novaSessao.notes}
+                onChange={(e) => setNovaSessao({ ...novaSessao, notes: e.target.value })}
+                className="bg-slate-700 border-slate-600 text-white"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAddModal(false)}
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleAddSessao}
+              disabled={!novaSessao.subject.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Adicionar Sessão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

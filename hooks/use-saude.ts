@@ -110,7 +110,6 @@ export function useSaude() {
         frequencia: sanitizeString(novoMedicamento.frequencia),
         horarios: sanitizeArray(novoMedicamento.horarios),
         data_inicio: sanitizeDate(novoMedicamento.data_inicio),
-        data_fim: novoMedicamento.data_fim ? sanitizeDate(novoMedicamento.data_fim) : undefined,
         observacoes: novoMedicamento.observacoes ? sanitizeString(novoMedicamento.observacoes) : undefined,
       }
 
@@ -147,7 +146,7 @@ export function useSaude() {
         ...novoRegistro,
         data: sanitizeDate(novoRegistro.data),
         fatores: novoRegistro.fatores ? sanitizeArray(novoRegistro.fatores) : undefined,
-        observacoes: novoRegistro.observacoes ? sanitizeString(novoRegistro.observacoes) : undefined,
+        notas: novoRegistro.notas ? sanitizeString(novoRegistro.notas) : undefined,
       }
 
       // Validar dados
@@ -183,7 +182,6 @@ export function useSaude() {
         ...novoMedicamentoTomado,
         data_tomada: sanitizeDate(novoMedicamentoTomado.data_tomada),
         horario_tomada: sanitizeString(novoMedicamentoTomado.horario_tomada),
-        observacoes: novoMedicamentoTomado.observacoes ? sanitizeString(novoMedicamentoTomado.observacoes) : undefined,
       }
 
       // Validações básicas

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
 import { sanitizeString, sanitizeDate } from "@/utils/validations"
 
 export interface Compromisso {
@@ -14,18 +15,22 @@ export interface Compromisso {
 }
 
 export function useCompromissos() {
+  const { user } = useAuth()
   const [compromissos, setCompromissos] = useState<Compromisso[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const carregarCompromissos = async () => {
     try {
+      if (!user) return // ✅ Verificar autenticação
+      
       setLoading(true)
       const hoje = new Date().toISOString().split('T')[0]
       
       const { data, error } = await supabase
         .from("compromissos")
         .select("*")
+        .eq("user_id", user.id) // ✅ Filtrar por user_id
         .eq("data", hoje)
         .order("horario", { ascending: true })
 

@@ -139,10 +139,12 @@ export function useReceitas() {
         receitaSanitizada.modo_preparo = sanitizeString(receita.modo_preparo)
       }
       if (receita.tempo_preparo !== undefined) {
-        receitaSanitizada.tempo_preparo = sanitizeNumber(receita.tempo_preparo)
+        const tempo = sanitizeNumber(receita.tempo_preparo)
+        receitaSanitizada.tempo_preparo = tempo === null ? undefined : tempo
       }
       if (receita.porcoes !== undefined) {
-        receitaSanitizada.porcoes = sanitizeNumber(receita.porcoes)
+        const porcoes = sanitizeNumber(receita.porcoes)
+        receitaSanitizada.porcoes = porcoes === null ? undefined : porcoes
       }
       if (receita.dificuldade !== undefined) {
         receitaSanitizada.dificuldade = receita.dificuldade

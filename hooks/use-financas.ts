@@ -111,7 +111,6 @@ export function useFinancas() {
         description: sanitizeString(despesa.description),
         amount: sanitizeNumber(despesa.amount),
         date: sanitizeDate(despesa.date),
-        notes: despesa.notes ? sanitizeString(despesa.notes) : undefined,
       }
 
       // Validar dados antes de enviar

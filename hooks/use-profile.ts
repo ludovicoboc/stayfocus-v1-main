@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase"
 import { useAuth } from "./use-auth"
 import type {
   UserPreferences,
@@ -14,7 +14,7 @@ import type {
 } from "@/types/profile"
 
 export function useProfile() {
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
   const { user } = useAuth()
 
   const [preferences, setPreferences] = useState<UserPreferences | null>(null)

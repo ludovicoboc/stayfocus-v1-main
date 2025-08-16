@@ -26,7 +26,7 @@ export default function AuthPage() {
 
     try {
       await signIn(email, password)
-      router.push("/alimentacao")
+      router.push("/")
     } catch (error: any) {
       setError(error.message || "Erro ao fazer login")
     }

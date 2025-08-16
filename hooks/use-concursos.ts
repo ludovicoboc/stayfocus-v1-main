@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import type { Concurso, Disciplina, Questao, Simulado } from "@/types/concursos"
+import { validateConcurso, validateQuestao, validateData, sanitizeString, sanitizeDate } from "@/utils/validations"
 
 export function useConcursos() {
   const { user } = useAuth()
@@ -51,36 +52,27 @@ export function useConcursos() {
 
       if (concursoError) throw concursoError
 
-      // Fetch subjects
-      const { data: disciplinasData, error: disciplinasError } = await supabase
+      // Fetch subjects with topics in a single query using JOIN
+      const { data: disciplinasComTopicos, error: disciplinasError } = await supabase
         .from("competition_subjects")
-        .select("*")
+        .select(`
+          *,
+          topicos:competition_topics(*)
+        `)
         .eq("competition_id", id)
         .order("created_at", { ascending: true })
 
       if (disciplinasError) throw disciplinasError
 
-      // Fetch topics for each subject
-      const disciplinasComTopicos: Disciplina[] = []
-
-      for (const disciplina of disciplinasData) {
-        const { data: topicosData, error: topicosError } = await supabase
-          .from("competition_topics")
-          .select("*")
-          .eq("subject_id", disciplina.id)
-          .order("created_at", { ascending: true })
-
-        if (topicosError) throw topicosError
-
-        disciplinasComTopicos.push({
-          ...disciplina,
-          topicos: topicosData,
-        })
-      }
+      // Transform the data to match expected structure
+      const disciplinasFormatadas: Disciplina[] = disciplinasComTopicos?.map((disciplina) => ({
+        ...disciplina,
+        topicos: disciplina.topicos || [],
+      })) || []
 
       return {
         ...concursoData,
-        disciplinas: disciplinasComTopicos,
+        disciplinas: disciplinasFormatadas,
       } as Concurso
     } catch (error) {
       console.error("Error fetching complete competition:", error)
@@ -92,17 +84,30 @@ export function useConcursos() {
     if (!user) return null
 
     try {
+      // Sanitizar dados de entrada
+      const concursoSanitizado = {
+        ...concurso,
+        title: sanitizeString(concurso.title),
+        organizer: sanitizeString(concurso.organizer),
+        registration_date: concurso.registration_date ? sanitizeDate(concurso.registration_date) : undefined,
+        exam_date: concurso.exam_date ? sanitizeDate(concurso.exam_date) : undefined,
+        edital_link: concurso.edital_link ? sanitizeString(concurso.edital_link) : undefined,
+      }
+
+      // Validar dados antes de enviar
+      validateData(concursoSanitizado, validateConcurso)
+
       // Insert competition
       const { data: concursoData, error: concursoError } = await supabase
         .from("competitions")
         .insert({
           user_id: user.id,
-          title: concurso.title,
-          organizer: concurso.organizer,
-          registration_date: concurso.registration_date,
-          exam_date: concurso.exam_date,
-          edital_link: concurso.edital_link,
-          status: concurso.status,
+          title: concursoSanitizado.title,
+          organizer: concursoSanitizado.organizer,
+          registration_date: concursoSanitizado.registration_date,
+          exam_date: concursoSanitizado.exam_date,
+          edital_link: concursoSanitizado.edital_link,
+          status: concursoSanitizado.status,
         })
         .select()
         .single()
@@ -237,18 +242,29 @@ export function useConcursos() {
     if (!user) return null
 
     try {
+      // Sanitizar dados de entrada
+      const questaoSanitizada = {
+        ...questao,
+        question_text: sanitizeString(questao.question_text),
+        correct_answer: sanitizeString(questao.correct_answer),
+        explanation: questao.explanation ? sanitizeString(questao.explanation) : undefined,
+      }
+
+      // Validar dados antes de enviar
+      validateData(questaoSanitizada, validateQuestao)
+
       const { data, error } = await supabase
         .from("competition_questions")
         .insert({
-          competition_id: questao.competition_id,
-          subject_id: questao.subject_id,
-          topic_id: questao.topic_id,
-          question_text: questao.question_text,
-          options: questao.options,
-          correct_answer: questao.correct_answer,
-          explanation: questao.explanation,
-          difficulty: questao.difficulty,
-          is_ai_generated: questao.is_ai_generated || false,
+          competition_id: questaoSanitizada.competition_id,
+          subject_id: questaoSanitizada.subject_id,
+          topic_id: questaoSanitizada.topic_id,
+          question_text: questaoSanitizada.question_text,
+          options: questaoSanitizada.options,
+          correct_answer: questaoSanitizada.correct_answer,
+          explanation: questaoSanitizada.explanation,
+          difficulty: questaoSanitizada.difficulty,
+          is_ai_generated: questaoSanitizada.is_ai_generated || false,
         })
         .select()
         .single()
@@ -344,6 +360,62 @@ export function useConcursos() {
     }
   }
 
+  const calcularProgressoConcurso = async (concursoId: string) => {
+    if (!user) return 0
+
+    try {
+      // Get all study sessions for this competition
+      const { data: sessoesData, error: sessoesError } = await supabase
+        .from("study_sessions")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("competition_id", concursoId)
+        .eq("completed", true)
+
+      if (sessoesError) throw sessoesError
+
+      // Get competition details with subjects and topics
+      const concursoCompleto = await fetchConcursoCompleto(concursoId)
+      if (!concursoCompleto || !concursoCompleto.disciplinas) return 0
+
+      // Calculate total topics
+      let totalTopicos = 0
+      let topicosComSessoes = new Set<string>()
+
+      for (const disciplina of concursoCompleto.disciplinas) {
+        if (disciplina.topicos) {
+          totalTopicos += disciplina.topicos.length
+        }
+      }
+
+      // Count topics that have study sessions
+      if (sessoesData && sessoesData.length > 0) {
+        for (const sessao of sessoesData) {
+          if (sessao.topic) {
+            // Map session topic to actual topics by partial match
+            for (const disciplina of concursoCompleto.disciplinas) {
+              if (disciplina.topicos) {
+                for (const topico of disciplina.topicos) {
+                  if (topico.name.toLowerCase().includes(sessao.topic.toLowerCase()) ||
+                      sessao.topic.toLowerCase().includes(topico.name.toLowerCase())) {
+                    topicosComSessoes.add(topico.id || topico.name)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Calculate progress percentage
+      if (totalTopicos === 0) return 0
+      return Math.round((topicosComSessoes.size / totalTopicos) * 100)
+    } catch (error) {
+      console.error("Error calculating competition progress:", error)
+      return 0
+    }
+  }
+
   return {
     concursos,
     loading,
@@ -359,5 +431,6 @@ export function useConcursos() {
     adicionarSimulado,
     buscarSimuladosConcurso,
     marcarSimuladoFavorito,
+    calcularProgressoConcurso,
   }
 }

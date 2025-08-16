@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
+import { useSono } from "@/hooks/use-sono"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,9 +11,19 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Moon, Sun, Bell, TrendingUp, Info } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 
 export default function SonoPage() {
   const { user, loading: authLoading } = useAuth()
+  const { 
+    registrosSono, 
+    configuracaoLembretes, 
+    estatisticas, 
+    loading: sonoLoading,
+    salvarRegistroSono, 
+    atualizarLembretes 
+  } = useSono()
+
   const [registroSono, setRegistroSono] = useState({
     horaDormir: "",
     horaAcordar: "",
@@ -25,6 +36,88 @@ export default function SonoPage() {
     lembreteAcordar: false,
     horarioAcordar: "07:00",
   })
+
+  // Atualizar estado dos lembretes quando carregar configuração
+  useEffect(() => {
+    if (configuracaoLembretes) {
+      setLembretes({
+        lembreteDormir: configuracaoLembretes.bedtime_reminder_enabled,
+        horarioLembrete: configuracaoLembretes.bedtime_reminder_time,
+        lembreteAcordar: configuracaoLembretes.wake_reminder_enabled,
+        horarioAcordar: configuracaoLembretes.wake_reminder_time,
+      })
+    }
+  }, [configuracaoLembretes])
+  
+  const [salvandoRegistro, setSalvandoRegistro] = useState(false)
+  const [salvandoLembretes, setSalvandoLembretes] = useState(false)
+
+  // Função para salvar registro de sono
+  const handleSalvarRegistro = async () => {
+    if (!registroSono.horaDormir || !registroSono.horaAcordar) {
+      toast.error("Por favor, preencha os horários de dormir e acordar")
+      return
+    }
+
+    setSalvandoRegistro(true)
+    try {
+      const hoje = new Date().toISOString().split('T')[0]
+      
+      const { error } = await salvarRegistroSono({
+        bedtime: registroSono.horaDormir,
+        wake_time: registroSono.horaAcordar,
+        sleep_quality: registroSono.qualidade,
+        notes: registroSono.observacoes || undefined,
+        date: hoje
+      })
+
+      if (error) {
+        toast.error("Erro ao salvar registro de sono")
+        console.error(error)
+      } else {
+        toast.success("Registro de sono salvo com sucesso!")
+        // Limpar formulário
+        setRegistroSono({
+          horaDormir: "",
+          horaAcordar: "",
+          qualidade: 5,
+          observacoes: "",
+        })
+      }
+    } catch (error) {
+      toast.error("Erro inesperado ao salvar")
+      console.error(error)
+    } finally {
+      setSalvandoRegistro(false)
+    }
+  }
+
+  // Função para salvar configurações de lembretes
+  const handleSalvarLembretes = async () => {
+    setSalvandoLembretes(true)
+    try {
+      const { error } = await atualizarLembretes({
+        bedtime_reminder_enabled: lembretes.lembreteDormir,
+        bedtime_reminder_time: lembretes.horarioLembrete,
+        wake_reminder_enabled: lembretes.lembreteAcordar,
+        wake_reminder_time: lembretes.horarioAcordar,
+        active: true,
+        weekdays: ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"]
+      })
+
+      if (error) {
+        toast.error("Erro ao salvar configurações")
+        console.error(error)
+      } else {
+        toast.success("Configurações salvas com sucesso!")
+      }
+    } catch (error) {
+      toast.error("Erro inesperado ao salvar")
+      console.error(error)
+    } finally {
+      setSalvandoLembretes(false)
+    }
+  }
 
   if (authLoading) {
     return (
@@ -171,7 +264,13 @@ export default function SonoPage() {
                     />
                   </div>
 
-                  <Button className="w-full bg-indigo-600 hover:bg-indigo-700">Salvar Registro</Button>
+                  <Button 
+                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                    onClick={handleSalvarRegistro}
+                    disabled={salvandoRegistro}
+                  >
+                    {salvandoRegistro ? "Salvando..." : "Salvar Registro"}
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -207,25 +306,101 @@ export default function SonoPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12">
-                  <Moon className="w-16 h-16 mx-auto mb-4 text-slate-600" />
-                  <h3 className="text-xl font-semibold text-white mb-2">Dados Insuficientes</h3>
-                  <p className="text-slate-400 mb-6">Registre seu sono por alguns dias para ver os padrões</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-md mx-auto">
-                    <div className="p-4 bg-slate-900 rounded-lg">
-                      <div className="text-2xl font-bold text-indigo-400">0h</div>
-                      <div className="text-sm text-slate-400">Média Semanal</div>
-                    </div>
-                    <div className="p-4 bg-slate-900 rounded-lg">
-                      <div className="text-2xl font-bold text-green-400">0</div>
-                      <div className="text-sm text-slate-400">Qualidade Média</div>
-                    </div>
-                    <div className="p-4 bg-slate-900 rounded-lg">
-                      <div className="text-2xl font-bold text-yellow-400">0%</div>
-                      <div className="text-sm text-slate-400">Consistência</div>
+                {sonoLoading ? (
+                  <div className="text-center py-12">
+                    <div className="text-white">Carregando estatísticas...</div>
+                  </div>
+                ) : !estatisticas || estatisticas.totalRegistros === 0 ? (
+                  <div className="text-center py-12">
+                    <Moon className="w-16 h-16 mx-auto mb-4 text-slate-600" />
+                    <h3 className="text-xl font-semibold text-white mb-2">Dados Insuficientes</h3>
+                    <p className="text-slate-400 mb-6">Registre seu sono por alguns dias para ver os padrões</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-md mx-auto">
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <div className="text-2xl font-bold text-indigo-400">0h</div>
+                        <div className="text-sm text-slate-400">Média Semanal</div>
+                      </div>
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <div className="text-2xl font-bold text-green-400">0</div>
+                        <div className="text-sm text-slate-400">Qualidade Média</div>
+                      </div>
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <div className="text-2xl font-bold text-yellow-400">0%</div>
+                        <div className="text-sm text-slate-400">Consistência</div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Estatísticas Principais */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <div className="text-2xl font-bold text-indigo-400">{estatisticas.mediaHorasSono}h</div>
+                        <div className="text-sm text-slate-400">Média Semanal</div>
+                        {estatisticas.tendenciaHoras !== 'estavel' && (
+                          <div className={`text-xs mt-1 ${
+                            estatisticas.tendenciaHoras === 'aumentando' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {estatisticas.tendenciaHoras === 'aumentando' ? '↗ Aumentando' : '↘ Diminuindo'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <div className="text-2xl font-bold text-green-400">{estatisticas.mediaQualidade}</div>
+                        <div className="text-sm text-slate-400">Qualidade Média</div>
+                        {estatisticas.tendenciaQualidade !== 'estavel' && (
+                          <div className={`text-xs mt-1 ${
+                            estatisticas.tendenciaQualidade === 'melhorando' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {estatisticas.tendenciaQualidade === 'melhorando' ? '↗ Melhorando' : '↘ Piorando'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <div className="text-2xl font-bold text-yellow-400">{estatisticas.consistencia}%</div>
+                        <div className="text-sm text-slate-400">Consistência</div>
+                      </div>
+                    </div>
+
+                    {/* Informações Adicionais */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <h4 className="font-medium text-white mb-2">Padrões Identificados</h4>
+                        <div className="space-y-2 text-sm">
+                          {estatisticas.melhorDia && (
+                            <div className="text-green-400">
+                              Melhor dia: {estatisticas.melhorDia}
+                            </div>
+                          )}
+                          {estatisticas.horaIdealDormir && (
+                            <div className="text-slate-300">
+                              Horário comum para dormir: {estatisticas.horaIdealDormir}
+                            </div>
+                          )}
+                          {estatisticas.horaIdealAcordar && (
+                            <div className="text-slate-300">
+                              Horário comum para acordar: {estatisticas.horaIdealAcordar}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <h4 className="font-medium text-white mb-2">Resumo da Semana</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="text-slate-300">
+                            Registros: {estatisticas.totalRegistros}/7 dias
+                          </div>
+                          <div className="w-full bg-slate-700 rounded-full h-2">
+                            <div 
+                              className="bg-indigo-600 h-2 rounded-full" 
+                              style={{ width: `${(estatisticas.totalRegistros / 7) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -292,7 +467,13 @@ export default function SonoPage() {
                   </div>
                 )}
 
-                <Button className="w-full bg-indigo-600 hover:bg-indigo-700">Salvar Configurações</Button>
+                <Button 
+                  className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  onClick={handleSalvarLembretes}
+                  disabled={salvandoLembretes}
+                >
+                  {salvandoLembretes ? "Salvando..." : "Salvar Configurações"}
+                </Button>
               </CardContent>
             </Card>
 

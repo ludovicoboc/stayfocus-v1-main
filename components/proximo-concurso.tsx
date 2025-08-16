@@ -11,8 +11,9 @@ import Link from "next/link"
 import type { Concurso } from "@/types/concursos"
 
 export function ProximoConcurso() {
-  const { concursos, loading } = useConcursos()
+  const { concursos, loading, calcularProgressoConcurso } = useConcursos()
   const [proximoConcurso, setProximoConcurso] = useState<Concurso | null>(null)
+  const [progresso, setProgresso] = useState(0)
 
   useEffect(() => {
     if (concursos.length > 0) {
@@ -25,14 +26,22 @@ export function ProximoConcurso() {
           return new Date(a.exam_date).getTime() - new Date(b.exam_date).getTime()
         })
 
+      let concursoSelecionado: Concurso | null = null
       if (concursosFuturos.length > 0) {
-        setProximoConcurso(concursosFuturos[0])
+        concursoSelecionado = concursosFuturos[0]
       } else if (concursos.length > 0) {
         // If no future competitions, show the most recent one
-        setProximoConcurso(concursos[0])
+        concursoSelecionado = concursos[0]
+      }
+
+      setProximoConcurso(concursoSelecionado)
+
+      // Calculate progress for the selected competition
+      if (concursoSelecionado?.id) {
+        calcularProgressoConcurso(concursoSelecionado.id).then(setProgresso)
       }
     }
-  }, [concursos])
+  }, [concursos, calcularProgressoConcurso])
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return "Data não definida"
@@ -43,8 +52,7 @@ export function ProximoConcurso() {
     }
   }
 
-  // Calculate progress (placeholder - in real app this would be calculated from study sessions)
-  const progresso = 0
+
 
   if (loading) {
     return (

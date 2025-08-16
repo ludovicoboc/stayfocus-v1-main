@@ -10,37 +10,41 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Calendar, Clock, Star } from "lucide-react"
+import { Plus, Calendar, Clock, Star, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { useLazer } from "@/hooks/use-lazer"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 const CATEGORIAS = ["Leitura", "Música", "Jogos", "Exercício", "Arte", "Culinária", "Jardinagem", "Meditação", "Outro"]
 
 export function AtividadesLazer() {
-  const { atividades, estatisticas, adicionarAtividade, loading } = useLazer()
+  const { atividades, estatisticas, adicionarAtividade, loading, error, operationLoading, successMessage, clearMessages } = useLazer()
   const [isOpen, setIsOpen] = useState(false)
   const [formData, setFormData] = useState({
     nome: "",
     categoria: "",
     duracao_minutos: "",
-    notas: "",
+    observacoes: "",
+    avaliacao: "",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    clearMessages()
 
     try {
       await adicionarAtividade({
         nome: formData.nome,
         categoria: formData.categoria || undefined,
         duracao_minutos: formData.duracao_minutos ? Number.parseInt(formData.duracao_minutos) : undefined,
-        notas: formData.notas || undefined,
+        observacoes: formData.observacoes || undefined,
+        avaliacao: formData.avaliacao ? Number.parseInt(formData.avaliacao) : undefined,
         data_realizacao: new Date().toISOString(),
       })
 
-      setFormData({ nome: "", categoria: "", duracao_minutos: "", notas: "" })
+      setFormData({ nome: "", categoria: "", duracao_minutos: "", observacoes: "", avaliacao: "" })
       setIsOpen(false)
     } catch (error) {
-      console.error("Erro ao adicionar atividade:", error)
+      // Erro já tratado no hook
     }
   }
 
@@ -119,11 +123,25 @@ export function AtividadesLazer() {
               </div>
 
               <div>
-                <Label htmlFor="notas">Notas (opcional)</Label>
+                <Label htmlFor="avaliacao">Avaliação (1-10)</Label>
+                <Input
+                  id="avaliacao"
+                  type="number"
+                  value={formData.avaliacao}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, avaliacao: e.target.value }))}
+                  className="bg-slate-700 border-slate-600 text-white"
+                  min="1"
+                  max="10"
+                  placeholder="Opcional"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="observacoes">Observações (opcional)</Label>
                 <Textarea
-                  id="notas"
-                  value={formData.notas}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, notas: e.target.value }))}
+                  id="observacoes"
+                  value={formData.observacoes}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, observacoes: e.target.value }))}
                   className="bg-slate-700 border-slate-600 text-white"
                   rows={3}
                 />
@@ -138,8 +156,15 @@ export function AtividadesLazer() {
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Adicionar Atividade
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={operationLoading}>
+                  {operationLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Adicionando...
+                    </>
+                  ) : (
+                    "Adicionar Atividade"
+                  )}
                 </Button>
               </div>
             </form>
@@ -147,6 +172,20 @@ export function AtividadesLazer() {
         </Dialog>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Mensagens de Feedback */}
+        {error && (
+          <Alert className="bg-red-900/20 border-red-700/50">
+            <AlertCircle className="h-4 w-4 text-red-400" />
+            <AlertDescription className="text-red-200">{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert className="bg-green-900/20 border-green-700/50">
+            <CheckCircle2 className="h-4 w-4 text-green-400" />
+            <AlertDescription className="text-green-200">{successMessage}</AlertDescription>
+          </Alert>
+        )}
         {/* Estatísticas */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="bg-slate-700 border-slate-600">
@@ -215,7 +254,13 @@ export function AtividadesLazer() {
                           )}
                           <span>{new Date(atividade.data_realizacao).toLocaleDateString("pt-BR")}</span>
                         </div>
-                        {atividade.notas && <p className="text-slate-300 text-sm mt-2">{atividade.notas}</p>}
+                        {atividade.avaliacao && (
+                          <div className="flex items-center mt-2">
+                            <span className="text-yellow-400 text-sm mr-2">★</span>
+                            <span className="text-slate-300 text-sm">{atividade.avaliacao}/10</span>
+                          </div>
+                        )}
+                        {atividade.observacoes && <p className="text-slate-300 text-sm mt-2">{atividade.observacoes}</p>}
                       </div>
                     </div>
                   </CardContent>

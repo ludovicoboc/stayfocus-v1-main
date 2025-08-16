@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import type { AtividadePainelDia, Prioridade, Medicamento, SessaoFocoDashboard } from "@/types/dashboard"
+import { sanitizeString } from "@/utils/validations"
 
 interface DashboardData {
   painelDia: AtividadePainelDia[]
@@ -58,13 +59,32 @@ export function useDashboard() {
 
   const adicionarAtividadePainelDia = async (atividade: { horario: string; atividade: string; cor: string }) => {
     try {
+      // Sanitizar dados de entrada
+      const atividadeSanitizada = {
+        horario: sanitizeString(atividade.horario),
+        atividade: sanitizeString(atividade.atividade),
+        cor: sanitizeString(atividade.cor),
+      }
+
+      // Validações básicas
+      if (!atividadeSanitizada.horario) {
+        throw new Error("Horário é obrigatório")
+      }
+      if (!atividadeSanitizada.atividade) {
+        throw new Error("Descrição da atividade é obrigatória")
+      }
+
+      // Validar formato do horário
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+      if (!timeRegex.test(atividadeSanitizada.horario)) {
+        throw new Error("Horário deve ter formato HH:MM")
+      }
+
       const { data, error } = await supabase
         .from("painel_dia")
         .insert([
           {
-            horario: atividade.horario,
-            atividade: atividade.atividade,
-            cor: atividade.cor,
+            ...atividadeSanitizada,
             concluida: false,
           },
         ])

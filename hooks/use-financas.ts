@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import type { CategoriaGasto, Despesa, EnvelopeVirtual, PagamentoAgendado, GastosPorCategoria } from "@/types/financas"
+import { validateDespesa, validateData, sanitizeString, sanitizeNumber, sanitizeDate } from "@/utils/validations"
 
 export function useFinancas() {
   const { user } = useAuth()
@@ -104,11 +105,23 @@ export function useFinancas() {
     if (!user) return null
 
     try {
+      // Sanitizar dados de entrada
+      const despesaSanitizada = {
+        ...despesa,
+        description: sanitizeString(despesa.description),
+        amount: sanitizeNumber(despesa.amount),
+        date: sanitizeDate(despesa.date),
+        notes: despesa.notes ? sanitizeString(despesa.notes) : undefined,
+      }
+
+      // Validar dados antes de enviar
+      validateData(despesaSanitizada, validateDespesa)
+
       const { data, error } = await supabase
         .from("expenses")
         .insert({
           user_id: user.id,
-          ...despesa,
+          ...despesaSanitizada,
         })
         .select(`
           *,

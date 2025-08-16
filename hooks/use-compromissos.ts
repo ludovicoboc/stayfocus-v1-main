@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
+import { sanitizeString, sanitizeDate } from "@/utils/validations"
 
 export interface Compromisso {
   id: string
@@ -67,9 +68,35 @@ export function useCompromissos() {
 
   const adicionarCompromisso = async (compromisso: Omit<Compromisso, "id" | "concluido">) => {
     try {
+      // Sanitizar dados de entrada
+      const compromissoSanitizado = {
+        ...compromisso,
+        titulo: sanitizeString(compromisso.titulo),
+        horario: sanitizeString(compromisso.horario),
+        tipo: sanitizeString(compromisso.tipo),
+        data: sanitizeDate(compromisso.data),
+      }
+
+      // Validações básicas
+      if (!compromissoSanitizado.titulo) {
+        throw new Error("Título é obrigatório")
+      }
+      if (!compromissoSanitizado.horario) {
+        throw new Error("Horário é obrigatório")
+      }
+      if (!compromissoSanitizado.data) {
+        throw new Error("Data é obrigatória")
+      }
+
+      // Validar formato do horário
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+      if (!timeRegex.test(compromissoSanitizado.horario)) {
+        throw new Error("Horário deve ter formato HH:MM")
+      }
+
       const { data, error } = await supabase
         .from("compromissos")
-        .insert([{ ...compromisso, concluido: false }])
+        .insert([{ ...compromissoSanitizado, concluido: false }])
         .select()
         .single()
 

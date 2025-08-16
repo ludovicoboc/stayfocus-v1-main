@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
+import { useProfile } from "@/hooks/use-profile"
 import { PageHeader } from "@/components/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,17 +16,63 @@ import Link from "next/link"
 
 export default function PerfilPage() {
   const { user, loading } = useAuth()
-  const [preferences, setPreferences] = useState({
+  const {
+    preferences: userPreferences,
+    goals: userGoals,
+    profile,
+    loadingPreferences,
+    loadingGoals,
+    loadingProfile,
+    savePreferences,
+    saveGoals,
+    saveProfile,
+    exportUserData,
+    importUserData,
+    resetSettings,
+  } = useProfile()
+
+  const [displayName, setDisplayName] = useState("")
+  const [localPreferences, setLocalPreferences] = useState({
     highContrast: false,
     largeText: false,
     reducedStimuli: false,
   })
-  const [goals, setGoals] = useState({
+  const [localGoals, setLocalGoals] = useState({
     sleepHours: 8,
     dailyTasks: 5,
     waterGlasses: 8,
     breakFrequency: 2,
   })
+
+  // Sincronizar dados carregados com estados locais
+  useEffect(() => {
+    if (userPreferences) {
+      setLocalPreferences({
+        highContrast: userPreferences.high_contrast,
+        largeText: userPreferences.large_text,
+        reducedStimuli: userPreferences.reduced_stimuli,
+      })
+    }
+  }, [userPreferences])
+
+  useEffect(() => {
+    if (userGoals) {
+      setLocalGoals({
+        sleepHours: userGoals.sleep_hours,
+        dailyTasks: userGoals.daily_tasks,
+        waterGlasses: userGoals.water_glasses,
+        breakFrequency: userGoals.break_frequency,
+      })
+    }
+  }, [userGoals])
+
+  useEffect(() => {
+    if (profile?.display_name) {
+      setDisplayName(profile.display_name)
+    } else if (user?.email) {
+      setDisplayName(user.email.split("@")[0])
+    }
+  }, [profile, user])
 
   if (loading) {
     return (
@@ -54,7 +101,7 @@ export default function PerfilPage() {
   }
 
   const handlePreferenceChange = (key: string, value: boolean) => {
-    setPreferences((prev) => ({ ...prev, [key]: value }))
+    setLocalPreferences((prev) => ({ ...prev, [key]: value }))
     // Aplicar preferência imediatamente
     if (key === "highContrast") {
       document.documentElement.classList.toggle("high-contrast", value)
@@ -68,34 +115,76 @@ export default function PerfilPage() {
   }
 
   const handleGoalChange = (key: string, value: number) => {
-    setGoals((prev) => ({ ...prev, [key]: value }))
+    setLocalGoals((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleExportData = () => {
-    // Implementar exportação de dados
-    console.log("Exportando dados...")
+  const handleSaveProfile = async () => {
+    if (!displayName.trim()) {
+      alert("Por favor, insira um nome de exibição.")
+      return
+    }
+
+    const success = await saveProfile({ display_name: displayName.trim() })
+    if (success) {
+      alert("Informações salvas com sucesso!")
+    } else {
+      alert("Erro ao salvar informações. Tente novamente.")
+    }
   }
 
-  const handleImportData = () => {
-    // Implementar importação de dados
-    console.log("Importando dados...")
+  const handleSavePreferences = async () => {
+    const success = await savePreferences({
+      high_contrast: localPreferences.highContrast,
+      large_text: localPreferences.largeText,
+      reduced_stimuli: localPreferences.reducedStimuli,
+    })
+    
+    if (success) {
+      alert("Preferências salvas com sucesso!")
+    } else {
+      alert("Erro ao salvar preferências. Tente novamente.")
+    }
   }
 
-  const handleResetSettings = () => {
+  const handleSaveGoals = async () => {
+    const success = await saveGoals({
+      sleep_hours: localGoals.sleepHours,
+      daily_tasks: localGoals.dailyTasks,
+      water_glasses: localGoals.waterGlasses,
+      break_frequency: localGoals.breakFrequency,
+    })
+    
+    if (success) {
+      alert("Metas salvas com sucesso!")
+    } else {
+      alert("Erro ao salvar metas. Tente novamente.")
+    }
+  }
+
+  const handleExportData = async () => {
+    const exportData = await exportUserData()
+    if (exportData) {
+      alert("Dados exportados com sucesso!")
+    } else {
+      alert("Erro ao exportar dados. Tente novamente.")
+    }
+  }
+
+  const handleImportData = async () => {
+    const success = await importUserData()
+    if (success) {
+      alert("Dados importados com sucesso!")
+    }
+  }
+
+  const handleResetSettings = async () => {
     if (confirm("Tem certeza que deseja resetar todas as configurações? Esta ação não pode ser desfeita.")) {
-      setPreferences({
-        highContrast: false,
-        largeText: false,
-        reducedStimuli: false,
-      })
-      setGoals({
-        sleepHours: 8,
-        dailyTasks: 5,
-        waterGlasses: 8,
-        breakFrequency: 2,
-      })
-      // Remover classes do documento
-      document.documentElement.classList.remove("high-contrast", "large-text", "reduced-stimuli")
+      const success = await resetSettings()
+      if (success) {
+        alert("Configurações resetadas com sucesso!")
+      } else {
+        alert("Erro ao resetar configurações. Tente novamente.")
+      }
     }
   }
 
@@ -133,10 +222,13 @@ export default function PerfilPage() {
               <Input
                 id="name"
                 placeholder="Como você gostaria de ser chamado?"
-                defaultValue={user.email?.split("@")[0] || ""}
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
               />
             </div>
-            <Button className="w-full">Salvar Informações</Button>
+            <Button className="w-full" onClick={handleSaveProfile}>
+              Salvar Informações
+            </Button>
           </CardContent>
         </Card>
 
@@ -157,7 +249,7 @@ export default function PerfilPage() {
                   type="number"
                   min="6"
                   max="12"
-                  value={goals.sleepHours}
+                  value={localGoals.sleepHours}
                   onChange={(e) => handleGoalChange("sleepHours", Number(e.target.value))}
                 />
               </div>
@@ -168,7 +260,7 @@ export default function PerfilPage() {
                   type="number"
                   min="1"
                   max="20"
-                  value={goals.dailyTasks}
+                  value={localGoals.dailyTasks}
                   onChange={(e) => handleGoalChange("dailyTasks", Number(e.target.value))}
                 />
               </div>
@@ -179,7 +271,7 @@ export default function PerfilPage() {
                   type="number"
                   min="4"
                   max="15"
-                  value={goals.waterGlasses}
+                  value={localGoals.waterGlasses}
                   onChange={(e) => handleGoalChange("waterGlasses", Number(e.target.value))}
                 />
               </div>
@@ -190,12 +282,12 @@ export default function PerfilPage() {
                   type="number"
                   min="1"
                   max="6"
-                  value={goals.breakFrequency}
+                  value={localGoals.breakFrequency}
                   onChange={(e) => handleGoalChange("breakFrequency", Number(e.target.value))}
                 />
               </div>
             </div>
-            <Button className="w-full">Salvar Metas</Button>
+            <Button className="w-full" onClick={handleSaveGoals}>Salvar Metas</Button>
           </CardContent>
         </Card>
 
@@ -217,7 +309,7 @@ export default function PerfilPage() {
                 <p className="text-sm text-muted-foreground">Melhora a legibilidade com cores mais contrastantes</p>
               </div>
               <Switch
-                checked={preferences.highContrast}
+                checked={localPreferences.highContrast}
                 onCheckedChange={(checked) => handlePreferenceChange("highContrast", checked)}
               />
             </div>
@@ -233,7 +325,7 @@ export default function PerfilPage() {
                 <p className="text-sm text-muted-foreground">Aumenta o tamanho da fonte em toda a aplicação</p>
               </div>
               <Switch
-                checked={preferences.largeText}
+                checked={localPreferences.largeText}
                 onCheckedChange={(checked) => handlePreferenceChange("largeText", checked)}
               />
             </div>
@@ -249,15 +341,18 @@ export default function PerfilPage() {
                 <p className="text-sm text-muted-foreground">Interface mais calma com menos animações</p>
               </div>
               <Switch
-                checked={preferences.reducedStimuli}
+                checked={localPreferences.reducedStimuli}
                 onCheckedChange={(checked) => handlePreferenceChange("reducedStimuli", checked)}
               />
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex justify-between items-center">
               <Badge variant="outline" className="text-xs">
                 Preferências aplicadas automaticamente
               </Badge>
+              <Button size="sm" onClick={handleSavePreferences}>
+                Salvar Preferências
+              </Button>
             </div>
           </CardContent>
         </Card>

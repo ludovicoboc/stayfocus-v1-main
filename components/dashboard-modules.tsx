@@ -14,7 +14,7 @@ export function DashboardModules({ progressData = {} }: DashboardModulesProps) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
       {DASHBOARD_MODULES.map((modulo) => {
         const IconeModulo = modulo.icone
-        const progresso = progressData[modulo.href] || Math.floor(Math.random() * 100) // Temporário
+        const progresso = progressData[modulo.href] || 0
         
         return (
           <Link key={modulo.titulo} href={modulo.href}>

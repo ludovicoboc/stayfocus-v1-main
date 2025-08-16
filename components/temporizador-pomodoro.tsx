@@ -6,10 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Play, Pause, RotateCcw, Settings } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Play, Pause, RotateCcw, Settings, Link } from "lucide-react"
 import { usePomodoro } from "@/hooks/use-pomodoro"
+import { useEstudos } from "@/hooks/use-estudos"
 
 export function TemporizadorPomodoro() {
+  const [studySessionId, setStudySessionId] = useState<string | null>(null)
+  const { sessoes } = useEstudos()
   const {
     state,
     timeLeft,
@@ -22,9 +26,10 @@ export function TemporizadorPomodoro() {
     formatTime,
     getStateLabel,
     isActive,
-  } = usePomodoro()
+  } = usePomodoro(studySessionId)
 
   const [showSettings, setShowSettings] = useState(false)
+  const [showLinkSession, setShowLinkSession] = useState(false)
   const [tempConfig, setTempConfig] = useState(config)
 
   const handleStart = () => {
@@ -39,6 +44,14 @@ export function TemporizadorPomodoro() {
     adjustConfig(tempConfig)
     setShowSettings(false)
   }
+
+  const getLinkedSessionInfo = () => {
+    if (!studySessionId) return null
+    return sessoes.find(s => s.id === studySessionId)
+  }
+
+  const linkedSession = getLinkedSessionInfo()
+  const availableSessions = sessoes.filter(s => !s.completed)
 
   const getButtonText = () => {
     if (state === "idle") return "Iniciar"
@@ -60,6 +73,17 @@ export function TemporizadorPomodoro() {
           <CardTitle className="text-white">Temporizador Pomodoro</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Session Info */}
+          {linkedSession && (
+            <div className="bg-blue-800 rounded-lg p-3 mb-4">
+              <div className="text-blue-100 text-sm font-medium mb-1">Conectado à sessão:</div>
+              <div className="text-blue-100 text-xs">
+                {linkedSession.subject}
+                {linkedSession.topic && ` - ${linkedSession.topic}`}
+              </div>
+            </div>
+          )}
+
           {/* Timer Display */}
           <div className="text-center">
             <div className="bg-orange-800 rounded-lg p-4 mb-4">
@@ -102,6 +126,16 @@ export function TemporizadorPomodoro() {
               >
                 <Settings className="w-4 h-4 mr-2" />
                 Ajustar
+              </Button>
+
+              <Button
+                onClick={() => setShowLinkSession(true)}
+                variant="outline"
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                disabled={isActive && state !== "idle"}
+              >
+                <Link className="w-4 h-4 mr-2" />
+                {linkedSession ? "Alterar" : "Conectar"}
               </Button>
             </div>
           </div>
@@ -196,6 +230,77 @@ export function TemporizadorPomodoro() {
             </Button>
             <Button onClick={handleSaveSettings} className="bg-blue-600 hover:bg-blue-700">
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link Session Dialog */}
+      <Dialog open={showLinkSession} onOpenChange={setShowLinkSession}>
+        <DialogContent className="bg-slate-800 text-white border-slate-700">
+          <DialogHeader>
+            <DialogTitle>Conectar Sessão de Estudo</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label className="text-slate-300 mb-2 block">
+                Selecione uma sessão de estudo para conectar ao Pomodoro:
+              </Label>
+              {availableSessions.length > 0 ? (
+                <Select
+                  value={studySessionId || "none"}
+                  onValueChange={(value) => setStudySessionId(value === "none" ? null : value)}
+                >
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                    <SelectValue placeholder="Selecionar sessão" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    <SelectItem value="none" className="text-white">
+                      Nenhuma sessão (desconectar)
+                    </SelectItem>
+                    {availableSessions.map((sessao) => (
+                      <SelectItem key={sessao.id} value={sessao.id!} className="text-white">
+                        {sessao.subject}
+                        {sessao.topic && ` - ${sessao.topic}`}
+                        {` (${sessao.duration_minutes} min)`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-slate-400 text-sm">
+                  Nenhuma sessão de estudo ativa disponível. Crie uma sessão primeiro.
+                </div>
+              )}
+            </div>
+
+            {linkedSession && (
+              <div className="bg-slate-700 rounded-lg p-3">
+                <div className="text-slate-300 text-sm">
+                  <strong>Sessão atual:</strong> {linkedSession.subject}
+                  {linkedSession.topic && ` - ${linkedSession.topic}`}
+                </div>
+                <div className="text-slate-400 text-xs mt-1">
+                  Ciclos completados: {linkedSession.pomodoro_cycles || 0}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowLinkSession(false)}
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => setShowLinkSession(false)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>

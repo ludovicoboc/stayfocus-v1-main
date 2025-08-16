@@ -87,19 +87,7 @@ export default function SonoPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Moon className="w-6 h-6 text-indigo-400" />
-            <h1 className="text-xl font-semibold text-white">Controle do Sono</h1>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4">
+    <main className="max-w-7xl mx-auto p-4">
         <Tabs defaultValue="registrar" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 bg-slate-800">
             <TabsTrigger value="registrar" className="data-[state=active]:bg-indigo-600">
@@ -344,7 +332,6 @@ export default function SonoPage() {
             </Card>
           </TabsContent>
         </Tabs>
-      </main>
-    </div>
+    </main>
   )
 }

@@ -20,7 +20,7 @@ import { PrioridadesDia } from "@/components/prioridades-dia"
 import { TemporizadorFocoDashboard } from "@/components/temporizador-foco-dashboard"
 import { DashboardModules } from "@/components/dashboard-modules"
 import { ProximosCompromissos } from "@/components/proximos-compromissos"
-import { SidebarToggle } from "@/components/sidebar-toggle"
+
 import { LoadingScreen } from "@/components/loading-screen"
 
 export default function DashboardPage() {
@@ -55,28 +55,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 sm:px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <SidebarToggle />
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-white">Dashboard</h1>
-              <p className="text-slate-400 text-sm sm:text-base">Olá, {user.email?.split("@")[0]}! Como está seu dia hoje?</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-green-400 border-green-400 hidden sm:flex">
-              Online
-            </Badge>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Nova Atividade</span>
-            </Button>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 max-w-none">

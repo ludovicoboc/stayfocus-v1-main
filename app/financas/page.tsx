@@ -61,29 +61,7 @@ export default function FinancasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="icon" className="text-slate-400">
-              <Menu className="w-5 h-5" />
-            </Button>
-            <div className="flex items-center space-x-2">
-              <DollarSign className="w-5 h-5 text-green-400" />
-              <h1 className="text-xl font-semibold text-white">Finanças</h1>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="icon" className="text-slate-400" onClick={signOut}>
-              <User className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4">
+    <main className="max-w-7xl mx-auto p-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Rastreador de Gastos */}
           <RastreadorGastos />
@@ -105,7 +83,6 @@ export default function FinancasPage() {
           </blockquote>
           <div className="text-slate-500 text-xs mt-2">StayFocus Oficial</div>
         </div>
-      </main>
-    </div>
+    </main>
   )
 }

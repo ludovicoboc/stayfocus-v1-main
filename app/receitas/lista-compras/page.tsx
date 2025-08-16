@@ -110,36 +110,7 @@ export default function ListaComprasPage() {
   const itensAgrupadosComprados = agruparPorCategoria(itensComprados)
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Link href="/receitas">
-              <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-slate-700">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar
-              </Button>
-            </Link>
-            <ShoppingCart className="w-6 h-6 text-green-400" />
-            <h1 className="text-xl font-semibold text-white">Lista de Compras</h1>
-          </div>
-          {itensComprados.length > 0 && (
-            <Button
-              onClick={handleLimparLista}
-              variant="outline"
-              size="sm"
-              className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-transparent"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Limpar Comprados
-            </Button>
-          )}
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto p-4">
+    <main className="max-w-4xl mx-auto p-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Lista Principal */}
           <div className="lg:col-span-2 space-y-6">
@@ -353,7 +324,6 @@ export default function ListaComprasPage() {
             </Card>
           </div>
         </div>
-      </main>
-    </div>
+    </main>
   )
 }

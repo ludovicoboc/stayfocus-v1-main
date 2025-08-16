@@ -36,26 +36,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="icon" className="text-slate-400">
-              <Menu className="w-5 h-5" />
-            </Button>
-            <h1 className="text-xl font-semibold text-white">StayFocus</h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="icon" className="text-slate-400" onClick={signOut}>
-              <User className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4">
+    <main className="max-w-7xl mx-auto p-4">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white mb-2">Bem-vindo de volta!</h2>
           <p className="text-slate-400">Escolha uma área para começar sua jornada de desenvolvimento pessoal.</p>
@@ -198,7 +179,6 @@ export default function DashboardPage() {
             </Card>
           </Link>
         </div>
-      </main>
-    </div>
+    </main>
   )
 }

@@ -38,23 +38,7 @@ export default function LazerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="icon" className="text-slate-400">
-                ←
-              </Button>
-            </Link>
-            <h1 className="text-xl font-semibold text-white">Lazer</h1>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4 space-y-8">
+    <main className="max-w-7xl mx-auto p-4 space-y-8">
         {/* Temporizador de Lazer */}
         <TemporizadorLazer />
 
@@ -75,7 +59,6 @@ export default function LazerPage() {
           </div>
           <div className="text-slate-500 text-xs mt-1">StayFocus Oficial</div>
         </div>
-      </main>
-    </div>
+    </main>
   )
 }

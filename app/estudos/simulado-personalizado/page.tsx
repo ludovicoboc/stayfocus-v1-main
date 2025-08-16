@@ -140,50 +140,7 @@ export default function SimuladoPersonalizadoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <h1 className="text-xl font-semibold text-white">Conferência de Simulado</h1>
-          <div className="flex items-center space-x-2">
-            <Button
-              onClick={() => setIsHistoricoOpen(true)}
-              variant="outline"
-              size="sm"
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
-            >
-              <History className="w-4 h-4 mr-1" />
-              Histórico
-            </Button>
-            <Button
-              onClick={handleCarregarNovo}
-              variant="outline"
-              size="sm"
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
-            >
-              <RotateCcw className="w-4 h-4 mr-1" />
-              Carregar Novo
-            </Button>
-          </div>
-        </div>
-      </header>
+    <main className="max-w-7xl mx-auto p-4">{renderContent()}</main>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4">{renderContent()}</main>
-
-      {/* Footer Quote */}
-      <div className="text-center py-8 mt-12">
-        <blockquote className="text-slate-400 italic text-sm max-w-2xl mx-auto">
-          "Whāia te iti kahurangi, ki te tuohu koe, me he maunga teitei" - Provérbio da língua Māori
-          <br />
-          Tradução: "Busque o tesouro que você mais valoriza, se você inclinar a cabeça, que seja para uma montanha
-          elevada."
-        </blockquote>
-        <div className="text-slate-500 text-xs mt-2">StayFocus Oficial</div>
-      </div>
-
-      {/* Histórico Modal */}
-      <HistoricoModal open={isHistoricoOpen} onClose={() => setIsHistoricoOpen(false)} />
-    </div>
   )
 }

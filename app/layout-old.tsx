@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar-old"
 import { AppHeader } from "@/components/app-header"
 import { ThemeProvider } from "@/components/theme-provider"
 
@@ -35,21 +37,17 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="StayFocus" />
       </head>
-      <body className={`${inter.className} bg-gray-50 dark:bg-gray-900`}>
-        <ThemeProvider 
-          attribute="class" 
-          defaultTheme="system" 
-          enableSystem={true} 
-          disableTransitionOnChange
-        >
-          <div className="flex h-screen overflow-hidden">
-            <div className="flex flex-col flex-1 overflow-hidden">
+      <body className={`${inter.className} bg-slate-900`}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+          <SidebarProvider defaultOpen={false}>
+            <AppSidebar />
+            <SidebarInset className="flex-1">
               <AppHeader />
-              <main className="flex-1 overflow-y-auto p-4">
+              <main className="flex-1 overflow-auto p-4">
                 {children}
               </main>
-            </div>
-          </div>
+            </SidebarInset>
+          </SidebarProvider>
         </ThemeProvider>
       </body>
     </html>

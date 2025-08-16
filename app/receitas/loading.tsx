@@ -3,23 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ReceitasLoading() {
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header Skeleton */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Skeleton className="w-6 h-6 bg-slate-700" />
-            <Skeleton className="w-32 h-6 bg-slate-700" />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Skeleton className="w-32 h-10 bg-slate-700" />
-            <Skeleton className="w-40 h-10 bg-slate-700" />
-          </div>
-        </div>
-      </header>
-
-      {/* Filtros Skeleton */}
-      <div className="max-w-7xl mx-auto p-4">
+    <div className="max-w-7xl mx-auto p-4">
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <Skeleton className="flex-1 h-10 bg-slate-800" />
           <Skeleton className="w-full md:w-48 h-10 bg-slate-800" />
@@ -62,7 +46,6 @@ export default function ReceitasLoading() {
             </Card>
           ))}
         </div>
-      </div>
     </div>
   )
 }

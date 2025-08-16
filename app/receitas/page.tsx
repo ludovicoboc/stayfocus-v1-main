@@ -90,33 +90,7 @@ export default function ReceitasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <ChefHat className="w-6 h-6 text-orange-400" />
-            <h1 className="text-xl font-semibold text-white">Minhas Receitas</h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Link href="/receitas/adicionar">
-              <Button className="bg-orange-600 hover:bg-orange-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Receita
-              </Button>
-            </Link>
-            <Link href="/receitas/lista-compras">
-              <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-transparent">
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                Lista de Compras
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Filtros */}
-      <div className="max-w-7xl mx-auto p-4">
+    <div className="max-w-7xl mx-auto p-4">
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -247,7 +221,6 @@ export default function ReceitasPage() {
             </Link>
           </div>
         )}
-      </div>
     </div>
   )
 }

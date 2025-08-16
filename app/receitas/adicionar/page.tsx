@@ -157,25 +157,7 @@ export default function AdicionarReceitaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Link href="/receitas">
-              <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-slate-700">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar
-              </Button>
-            </Link>
-            <ChefHat className="w-6 h-6 text-orange-400" />
-            <h1 className="text-xl font-semibold text-white">Nova Receita</h1>
-          </div>
-        </div>
-      </header>
-
-      {/* Form */}
-      <main className="max-w-4xl mx-auto p-4">
+    <main className="max-w-4xl mx-auto p-4">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Informações Básicas */}
@@ -386,7 +368,6 @@ export default function AdicionarReceitaPage() {
             </div>
           </div>
         </form>
-      </main>
-    </div>
+    </main>
   )
 }

@@ -39,38 +39,7 @@ export default function EstudosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="icon" className="text-slate-400">
-              <Menu className="w-5 h-5" />
-            </Button>
-            <h1 className="text-xl font-semibold text-white">Estudos</h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Link href="/simulados">
-              <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                <FileText className="w-4 h-4 mr-1" />
-                Conferir Simulado
-              </Button>
-            </Link>
-            <Link href="/concursos">
-              <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                <Eye className="w-4 h-4 mr-1" />
-                Ver Todos Concursos
-              </Button>
-            </Link>
-            <Button variant="ghost" size="icon" className="text-slate-400" onClick={signOut}>
-              <User className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4">
+    <main className="max-w-7xl mx-auto p-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Temporizador Pomodoro */}
           <TemporizadorPomodoro />
@@ -92,7 +61,6 @@ export default function EstudosPage() {
           </blockquote>
           <div className="text-slate-500 text-xs mt-2">StayFocus Oficial</div>
         </div>
-      </main>
-    </div>
+    </main>
   )
 }

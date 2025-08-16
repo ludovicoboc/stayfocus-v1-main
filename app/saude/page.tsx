@@ -35,29 +35,20 @@ export default function SaudePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 pb-8">
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-4 mb-6">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-2xl font-bold text-white">Saúde</h1>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4">
+    <main className="max-w-5xl mx-auto px-4">
         <RegistroMedicamentos />
         <MonitoramentoHumor />
-      </main>
-
-      {/* Footer Quote */}
-      <footer className="max-w-5xl mx-auto px-4 mt-12 text-center">
-        <blockquote className="text-slate-400 italic text-sm">
-          "Whaka te iti kahurangi, ki te tuohu koe, me he maunga teitei" - Provérbio da língua Māori
-        </blockquote>
-        <div className="text-slate-500 text-xs mt-1">
-          Tradução: "Busque o tesouro que você mais valoriza, se você inclinar a cabeça, que seja para uma montanha
-          elevada."
-        </div>
-        <div className="text-slate-600 text-xs mt-2">StayFocus Oficial</div>
-      </footer>
-    </div>
+        {/* Footer Quote */}
+        <footer className="mt-12 text-center">
+          <blockquote className="text-slate-400 italic text-sm">
+            "Whaka te iti kahurangi, ki te tuohu koe, me he maunga teitei" - Provérbio da língua Māori
+          </blockquote>
+          <div className="text-slate-500 text-xs mt-1">
+            Tradução: "Busque o tesouro que você mais valoriza, se você inclinar a cabeça, que seja para uma montanha
+            elevada."
+          </div>
+          <div className="text-slate-600 text-xs mt-2">StayFocus Oficial</div>
+        </footer>
+    </main>
   )
 }

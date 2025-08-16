@@ -158,79 +158,7 @@ export default function ConcursoDetalhesPage() {
   const topicos = disciplinas.find((d) => d.id === disciplinaSelecionada)?.topicos || []
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <Link href="/concursos">
-              <Button variant="ghost" size="icon" className="text-slate-400">
-                <Menu className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div className="flex items-center">
-              <BookOpen className="w-5 h-5 text-blue-400 mr-2" />
-              <h1 className="text-xl font-semibold text-white">{concurso.title}</h1>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-              <Edit className="w-4 h-4 mr-1" />
-              Editar
-            </Button>
-            <Button variant="destructive" size="sm">
-              <Trash2 className="w-4 h-4 mr-1" />
-              Remover
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Concurso Info */}
-      <div className="bg-slate-800 border-b border-slate-700 px-4 py-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-center justify-between">
-            <div className="space-y-2 mb-4 md:mb-0">
-              <div className="flex items-center text-slate-300">
-                <Award className="w-4 h-4 mr-2 text-slate-400" />
-                <span>Fundação Getúlio Vargas (FGV)</span>
-              </div>
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center text-slate-300">
-                  <Calendar className="w-4 h-4 mr-2 text-slate-400" />
-                  <span>Data da Prova: {formatDate(concurso.exam_date)}</span>
-                </div>
-                <div className="flex items-center text-slate-300">
-                  <Calendar className="w-4 h-4 mr-2 text-slate-400" />
-                  <span>Inscrição: {formatDate(concurso.registration_date)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="w-full md:w-64">
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>Progresso Geral</span>
-                  <span>{overallProgress}%</span>
-                </div>
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full"
-                    style={{ width: `${overallProgress}%` }}
-                    role="progressbar"
-                    aria-valuenow={overallProgress}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4">
+    <main className="max-w-7xl mx-auto p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800 border-slate-700">
             <TabsTrigger value="conteudo" className="data-[state=active]:bg-blue-600">
@@ -417,7 +345,6 @@ export default function ConcursoDetalhesPage() {
             <SeletorQuestoesPersonalizadas questoes={questoesConcurso} titulo="Criar Simulado Personalizado" />
           </TabsContent>
         </Tabs>
-      </main>
-    </div>
+    </main>
   )
 }

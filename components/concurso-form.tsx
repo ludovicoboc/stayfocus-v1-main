@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, X } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Plus, X, AlertCircle } from "lucide-react"
 import type { Concurso, ConcursoStatus, Disciplina } from "@/types/concursos"
 
 interface ConcursoFormProps {
@@ -24,6 +25,7 @@ export function ConcursoForm({ open, onClose, onSave }: ConcursoFormProps) {
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([])
   const [novaDisciplina, setNovaDisciplina] = useState("")
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleAddDisciplina = () => {
     if (!novaDisciplina.trim()) return
@@ -42,6 +44,8 @@ export function ConcursoForm({ open, onClose, onSave }: ConcursoFormProps) {
     if (!titulo.trim() || !organizadora.trim()) return
 
     setSaving(true)
+    setError(null)
+    
     try {
       const concurso: Concurso = {
         title: titulo.trim(),
@@ -55,6 +59,9 @@ export function ConcursoForm({ open, onClose, onSave }: ConcursoFormProps) {
 
       await onSave(concurso)
       resetForm()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido ao salvar concurso'
+      setError(errorMessage)
     } finally {
       setSaving(false)
     }
@@ -69,6 +76,7 @@ export function ConcursoForm({ open, onClose, onSave }: ConcursoFormProps) {
     setStatus("planejado")
     setDisciplinas([])
     setNovaDisciplina("")
+    setError(null)
   }
 
   return (
@@ -79,6 +87,12 @@ export function ConcursoForm({ open, onClose, onSave }: ConcursoFormProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {error && (
+            <Alert className="bg-red-900/20 border-red-800 text-red-200">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           <div>
             <label htmlFor="titulo" className="text-sm text-slate-300 mb-1 block">
               Título

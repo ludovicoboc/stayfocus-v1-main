@@ -218,6 +218,10 @@ export class DataValidator {
 
   private isValidDate(value: any): boolean {
     if (!this.isString(value)) return false
+    
+    // Se a string estiver vazia, considerar válida (campo opcional)
+    if (value.trim() === '') return true
+    
     // Aceita formatos ISO (YYYY-MM-DD) e DD/MM/YYYY
     const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/
     const brDateRegex = /^\d{2}\/\d{2}\/\d{4}$/
@@ -363,14 +367,27 @@ export function validateDespesa(despesa: any): ValidationResult {
 export function validateConcurso(concurso: any): ValidationResult {
   const validator = new DataValidator()
   
-  return validator.validateFields([
+  const rules = [
     { field: 'Título', value: concurso.title, rules: ['required', 'string', 'minLength:2', 'maxLength:200'] },
     { field: 'Organizador', value: concurso.organizer, rules: ['required', 'string', 'minLength:2', 'maxLength:100'] },
-    { field: 'Data de inscrição', value: concurso.registration_date, rules: ['date'] },
-    { field: 'Data da prova', value: concurso.exam_date, rules: ['date'] },
-    { field: 'Link do edital', value: concurso.edital_link, rules: ['url'] },
-    { field: 'Status', value: concurso.status, rules: ['enum:ativo,inscrito,finalizado,cancelado'] }
-  ])
+    { field: 'Status', value: concurso.status, rules: ['enum:planejado,inscrito,estudando,realizado,aguardando_resultado'] }
+  ]
+
+  // Validar datas apenas se fornecidas (campos opcionais)
+  if (concurso.registration_date) {
+    rules.push({ field: 'Data de inscrição', value: concurso.registration_date, rules: ['date'] })
+  }
+  
+  if (concurso.exam_date) {
+    rules.push({ field: 'Data da prova', value: concurso.exam_date, rules: ['date'] })
+  }
+
+  // Validar URL apenas se fornecida (campo opcional)
+  if (concurso.edital_link && concurso.edital_link.trim() !== '') {
+    rules.push({ field: 'Link do edital', value: concurso.edital_link, rules: ['url'] })
+  }
+  
+  return validator.validateFields(rules)
 }
 
 // Validação para sessões de estudo

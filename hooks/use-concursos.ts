@@ -148,7 +148,8 @@ export function useConcursos() {
       return concursoData
     } catch (error) {
       console.error("Error adding competition:", error)
-      return null
+      // Re-throw the error para que seja capturado pela interface
+      throw error
     }
   }
 

@@ -1,87 +1,131 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase"
-import { useAuth } from "@/hooks/use-auth"
-import type { Concurso, Disciplina, Questao, Simulado } from "@/types/concursos"
-import { validateConcurso, validateQuestao, validateData, sanitizeString, sanitizeDate } from "@/utils/validations"
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
+import { useAuth } from "@/hooks/use-auth";
+import type {
+  Concurso,
+  Disciplina,
+  Questao,
+  Simulado,
+} from "@/types/concursos";
+import {
+  validateConcurso,
+  validateQuestao,
+  validateData,
+  sanitizeString,
+  sanitizeDate,
+} from "@/utils/validations";
 
 export function useConcursos() {
-  const { user } = useAuth()
-  const supabase = createClient()
-  const [concursos, setConcursos] = useState<Concurso[]>([])
-  const [loading, setLoading] = useState(true)
+  const { user } = useAuth();
+  const supabase = createClient();
+  const [concursos, setConcursos] = useState<Concurso[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
-      fetchConcursos()
+      fetchConcursos();
     }
-  }, [user])
+  }, [user]);
 
   const fetchConcursos = async () => {
-    if (!user) return
+    if (!user) return;
 
     try {
-      setLoading(true)
+      setLoading(true);
       const { data, error } = await supabase
         .from("competitions")
-        .select("id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at")
+        .select(
+          "id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at",
+        )
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false });
 
-      if (error) throw error
-      setConcursos(data || [])
+      if (error) throw error;
+      setConcursos(data || []);
     } catch (error) {
-      console.error("Error fetching competitions:", error)
+      console.error("Error fetching competitions:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const fetchConcursoCompleto = async (id: string) => {
-    if (!user) return null
+    if (!user) return null;
 
     try {
+      console.log("🔍 Buscando concurso completo, ID:", id);
+
       // Fetch competition
       const { data: concursoData, error: concursoError } = await supabase
         .from("competitions")
-        .select("id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at")
+        .select(
+          "id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at",
+        )
         .eq("id", id)
         .eq("user_id", user.id)
-        .single()
+        .single();
 
-      if (concursoError) throw concursoError
+      if (concursoError) {
+        console.error("❌ Erro ao buscar concurso:", concursoError);
+        if (concursoError.code === "PGRST116") {
+          console.warn("⚠️ Concurso não encontrado ou não pertence ao usuário");
+          return null;
+        }
+        throw concursoError;
+      }
+
+      console.log("✅ Concurso encontrado:", concursoData.title);
 
       // Fetch subjects with topics in a single query using JOIN
-      const { data: disciplinasComTopicos, error: disciplinasError } = await supabase
-        .from("competition_subjects")
-        .select(`
+      const { data: disciplinasComTopicos, error: disciplinasError } =
+        await supabase
+          .from("competition_subjects")
+          .select(
+            `
           id, competition_id, name, progress, created_at, updated_at,
           topicos:competition_topics(id, subject_id, name, completed, created_at, updated_at)
-        `)
-        .eq("competition_id", id)
-        .order("created_at", { ascending: true })
+        `,
+          )
+          .eq("competition_id", id)
+          .order("created_at", { ascending: true });
 
-      if (disciplinasError) throw disciplinasError
+      if (disciplinasError) throw disciplinasError;
 
       // Transform the data to match expected structure
-      const disciplinasFormatadas: Disciplina[] = disciplinasComTopicos?.map((disciplina) => ({
-        ...disciplina,
-        topicos: disciplina.topicos || [],
-      })) || []
+      const disciplinasFormatadas: Disciplina[] =
+        disciplinasComTopicos?.map((disciplina) => ({
+          ...disciplina,
+          topicos: disciplina.topicos || [],
+        })) || [];
 
-      return {
+      const resultado = {
         ...concursoData,
         disciplinas: disciplinasFormatadas,
-      } as Concurso
+      } as Concurso;
+
+      console.log("📊 Concurso completo carregado:", {
+        id: resultado.id,
+        titulo: resultado.title,
+        disciplinas: disciplinasFormatadas.length,
+        totalTopicos: disciplinasFormatadas.reduce(
+          (acc, d) => acc + (d.topicos?.length || 0),
+          0,
+        ),
+      });
+
+      return resultado;
     } catch (error) {
-      console.error("Error fetching complete competition:", error)
-      return null
+      console.error("❌ Erro ao buscar concurso completo:", error);
+      return null;
     }
-  }
+  };
 
   const adicionarConcurso = async (concurso: Concurso) => {
-    if (!user) return null
+    if (!user) return null;
+
+    console.log("🎯 Iniciando criação de concurso:", concurso.title);
 
     try {
       // Sanitizar dados de entrada
@@ -89,13 +133,19 @@ export function useConcursos() {
         ...concurso,
         title: sanitizeString(concurso.title),
         organizer: sanitizeString(concurso.organizer),
-        registration_date: concurso.registration_date ? sanitizeDate(concurso.registration_date) : undefined,
-        exam_date: concurso.exam_date ? sanitizeDate(concurso.exam_date) : undefined,
-        edital_link: concurso.edital_link ? sanitizeString(concurso.edital_link) : undefined,
-      }
+        registration_date: concurso.registration_date
+          ? sanitizeDate(concurso.registration_date)
+          : undefined,
+        exam_date: concurso.exam_date
+          ? sanitizeDate(concurso.exam_date)
+          : undefined,
+        edital_link: concurso.edital_link
+          ? sanitizeString(concurso.edital_link)
+          : undefined,
+      };
 
       // Validar dados antes de enviar
-      validateData(concursoSanitizado, validateConcurso)
+      validateData(concursoSanitizado, validateConcurso);
 
       // Insert competition
       const { data: concursoData, error: concursoError } = await supabase
@@ -110,51 +160,93 @@ export function useConcursos() {
           status: concursoSanitizado.status,
         })
         .select("id")
-        .single()
+        .single();
 
-      if (concursoError) throw concursoError
+      if (concursoError) {
+        console.error("❌ Erro ao inserir concurso:", concursoError);
+        throw concursoError;
+      }
+
+      console.log("✅ Concurso criado com ID:", concursoData.id);
 
       // Insert subjects and topics
       if (concurso.disciplinas && concurso.disciplinas.length > 0) {
-        for (const disciplina of concurso.disciplinas) {
-          const { data: disciplinaData, error: disciplinaError } = await supabase
-            .from("competition_subjects")
-            .insert({
-              competition_id: concursoData.id,
-              name: disciplina.name,
-              progress: 0,
-            })
-            .select("id")
-            .single()
+        console.log(`📚 Inserindo ${concurso.disciplinas.length} disciplinas`);
 
-          if (disciplinaError) throw disciplinaError
+        for (const disciplina of concurso.disciplinas) {
+          console.log(`📖 Criando disciplina: ${disciplina.name}`);
+
+          const { data: disciplinaData, error: disciplinaError } =
+            await supabase
+              .from("competition_subjects")
+              .insert({
+                competition_id: concursoData.id,
+                name: disciplina.name,
+                progress: 0,
+              })
+              .select("id")
+              .single();
+
+          if (disciplinaError) {
+            console.error("❌ Erro ao inserir disciplina:", disciplinaError);
+            throw disciplinaError;
+          }
+
+          console.log(`✅ Disciplina criada com ID: ${disciplinaData.id}`);
 
           if (disciplina.topicos && disciplina.topicos.length > 0) {
-            const topicosToInsert = disciplina.topicos.map((topico) => ({
-              subject_id: disciplinaData.id,
-              name: topico.name || topico,
-              completed: false,
-            }))
+            console.log(
+              `📝 Inserindo ${disciplina.topicos.length} tópicos para disciplina ${disciplina.name}`,
+            );
 
-            const { error: topicosError } = await supabase.from("competition_topics").insert(topicosToInsert)
+            const topicosToInsert = disciplina.topicos.map((topico) => {
+              // Tratamento seguro para tópicos que podem ser string ou objeto
+              const nomeTopico =
+                typeof topico === "string"
+                  ? topico
+                  : topico.name || String(topico);
 
-            if (topicosError) throw topicosError
+              return {
+                subject_id: disciplinaData.id,
+                name: nomeTopico,
+                completed: false,
+              };
+            });
+
+            const { error: topicosError } = await supabase
+              .from("competition_topics")
+              .insert(topicosToInsert);
+
+            if (topicosError) {
+              console.error("❌ Erro ao inserir tópicos:", topicosError);
+              throw topicosError;
+            }
+
+            console.log(
+              `✅ ${topicosToInsert.length} tópicos inseridos com sucesso`,
+            );
           }
         }
       }
 
       // Refresh the list
-      await fetchConcursos()
-      return concursoData
+      await fetchConcursos();
+      console.log("🎉 Concurso criado com sucesso! ID:", concursoData.id);
+      return concursoData;
     } catch (error) {
-      console.error("Error adding competition:", error)
-      // Re-throw the error para que seja capturado pela interface
-      throw error
+      console.error("❌ Erro completo ao adicionar concurso:", error);
+
+      // Fornecer erro mais específico para a interface
+      if (error instanceof Error) {
+        throw new Error(`Falha ao criar concurso: ${error.message}`);
+      } else {
+        throw new Error("Erro desconhecido ao criar concurso");
+      }
     }
-  }
+  };
 
   const atualizarConcurso = async (id: string, dados: Partial<Concurso>) => {
-    if (!user) return false
+    if (!user) return false;
 
     try {
       const { error } = await supabase
@@ -169,37 +261,44 @@ export function useConcursos() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .eq("user_id", user.id)
+        .eq("user_id", user.id);
 
-      if (error) throw error
+      if (error) throw error;
 
       // Refresh the list
-      await fetchConcursos()
-      return true
+      await fetchConcursos();
+      return true;
     } catch (error) {
-      console.error("Error updating competition:", error)
-      return false
+      console.error("Error updating competition:", error);
+      return false;
     }
-  }
+  };
 
   const removerConcurso = async (id: string) => {
-    if (!user) return false
+    if (!user) return false;
 
     try {
-      const { error } = await supabase.from("competitions").delete().eq("id", id).eq("user_id", user.id)
+      const { error } = await supabase
+        .from("competitions")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
 
-      if (error) throw error
+      if (error) throw error;
 
-      setConcursos(concursos.filter((c) => c.id !== id))
-      return true
+      setConcursos(concursos.filter((c) => c.id !== id));
+      return true;
     } catch (error) {
-      console.error("Error removing competition:", error)
-      return false
+      console.error("Error removing competition:", error);
+      return false;
     }
-  }
+  };
 
-  const atualizarProgressoDisciplina = async (disciplinaId: string, progresso: number) => {
-    if (!user) return false
+  const atualizarProgressoDisciplina = async (
+    disciplinaId: string,
+    progresso: number,
+  ) => {
+    if (!user) return false;
 
     try {
       const { error } = await supabase
@@ -208,18 +307,21 @@ export function useConcursos() {
           progress: progresso,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", disciplinaId)
+        .eq("id", disciplinaId);
 
-      if (error) throw error
-      return true
+      if (error) throw error;
+      return true;
     } catch (error) {
-      console.error("Error updating subject progress:", error)
-      return false
+      console.error("Error updating subject progress:", error);
+      return false;
     }
-  }
+  };
 
-  const atualizarTopicoCompletado = async (topicoId: string, completado: boolean) => {
-    if (!user) return false
+  const atualizarTopicoCompletado = async (
+    topicoId: string,
+    completado: boolean,
+  ) => {
+    if (!user) return false;
 
     try {
       const { error } = await supabase
@@ -228,19 +330,19 @@ export function useConcursos() {
           completed: completado,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", topicoId)
+        .eq("id", topicoId);
 
-      if (error) throw error
-      return true
+      if (error) throw error;
+      return true;
     } catch (error) {
-      console.error("Error updating topic completion:", error)
-      return false
+      console.error("Error updating topic completion:", error);
+      return false;
     }
-  }
+  };
 
   // Questões
   const adicionarQuestao = async (questao: Questao) => {
-    if (!user) return null
+    if (!user) return null;
 
     try {
       // Sanitizar dados de entrada
@@ -248,11 +350,13 @@ export function useConcursos() {
         ...questao,
         question_text: sanitizeString(questao.question_text),
         correct_answer: sanitizeString(questao.correct_answer),
-        explanation: questao.explanation ? sanitizeString(questao.explanation) : undefined,
-      }
+        explanation: questao.explanation
+          ? sanitizeString(questao.explanation)
+          : undefined,
+      };
 
       // Validar dados antes de enviar
-      validateData(questaoSanitizada, validateQuestao)
+      validateData(questaoSanitizada, validateQuestao);
 
       const { data, error } = await supabase
         .from("competition_questions")
@@ -268,41 +372,41 @@ export function useConcursos() {
           is_ai_generated: questaoSanitizada.is_ai_generated || false,
         })
         .select(
-          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at"
+          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at",
         )
-        .single()
+        .single();
 
-      if (error) throw error
-      return data
+      if (error) throw error;
+      return data;
     } catch (error) {
-      console.error("Error adding question:", error)
-      return null
+      console.error("Error adding question:", error);
+      return null;
     }
-  }
+  };
 
   const buscarQuestoesConcurso = async (concursoId: string) => {
-    if (!user) return []
+    if (!user) return [];
 
     try {
       const { data, error } = await supabase
         .from("competition_questions")
         .select(
-          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at"
+          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at",
         )
         .eq("competition_id", concursoId)
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false });
 
-      if (error) throw error
-      return data as Questao[]
+      if (error) throw error;
+      return data as Questao[];
     } catch (error) {
-      console.error("Error fetching competition questions:", error)
-      return []
+      console.error("Error fetching competition questions:", error);
+      return [];
     }
-  }
+  };
 
   // Simulados
   const adicionarSimulado = async (simulado: Simulado) => {
-    if (!user) return null
+    if (!user) return null;
 
     try {
       const { data, error } = await supabase
@@ -314,38 +418,45 @@ export function useConcursos() {
           questions: simulado.questions,
           is_favorite: simulado.is_favorite || false,
         })
-        .select("id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at")
-        .single()
+        .select(
+          "id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at",
+        )
+        .single();
 
-      if (error) throw error
-      return data
+      if (error) throw error;
+      return data;
     } catch (error) {
-      console.error("Error adding simulation:", error)
-      return null
+      console.error("Error adding simulation:", error);
+      return null;
     }
-  }
+  };
 
   const buscarSimuladosConcurso = async (concursoId: string) => {
-    if (!user) return []
+    if (!user) return [];
 
     try {
       const { data, error } = await supabase
         .from("competition_simulations")
-        .select("id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at")
+        .select(
+          "id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at",
+        )
         .eq("competition_id", concursoId)
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false });
 
-      if (error) throw error
-      return data as Simulado[]
+      if (error) throw error;
+      return data as Simulado[];
     } catch (error) {
-      console.error("Error fetching competition simulations:", error)
-      return []
+      console.error("Error fetching competition simulations:", error);
+      return [];
     }
-  }
+  };
 
-  const marcarSimuladoFavorito = async (simuladoId: string, favorito: boolean) => {
-    if (!user) return false
+  const marcarSimuladoFavorito = async (
+    simuladoId: string,
+    favorito: boolean,
+  ) => {
+    if (!user) return false;
 
     try {
       const { error } = await supabase
@@ -355,18 +466,18 @@ export function useConcursos() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", simuladoId)
-        .eq("user_id", user.id)
+        .eq("user_id", user.id);
 
-      if (error) throw error
-      return true
+      if (error) throw error;
+      return true;
     } catch (error) {
-      console.error("Error marking simulation as favorite:", error)
-      return false
+      console.error("Error marking simulation as favorite:", error);
+      return false;
     }
-  }
+  };
 
   const calcularProgressoConcurso = async (concursoId: string) => {
-    if (!user) return 0
+    if (!user) return 0;
 
     try {
       // Get all study sessions for this competition
@@ -375,24 +486,27 @@ export function useConcursos() {
         .select("id, user_id, competition_id, topic, completed")
         .eq("user_id", user.id)
         .eq("competition_id", concursoId)
-        .eq("completed", true)
+        .eq("completed", true);
 
-      if (sessoesError) throw sessoesError
+      if (sessoesError) throw sessoesError;
 
       // Map DB field 'topic' -> local 'topico' to keep frontend naming consistent
-      const sessoes = (sessoesData || []).map((s) => ({ ...s, topico: s.topic }))
+      const sessoes = (sessoesData || []).map((s) => ({
+        ...s,
+        topico: s.topic,
+      }));
 
       // Get competition details with subjects and topics
-      const concursoCompleto = await fetchConcursoCompleto(concursoId)
-      if (!concursoCompleto || !concursoCompleto.disciplinas) return 0
+      const concursoCompleto = await fetchConcursoCompleto(concursoId);
+      if (!concursoCompleto || !concursoCompleto.disciplinas) return 0;
 
       // Calculate total topics
-      let totalTopicos = 0
-      let topicosComSessoes = new Set<string>()
+      let totalTopicos = 0;
+      let topicosComSessoes = new Set<string>();
 
       for (const disciplina of concursoCompleto.disciplinas) {
         if (disciplina.topicos) {
-          totalTopicos += disciplina.topicos.length
+          totalTopicos += disciplina.topicos.length;
         }
       }
 
@@ -404,9 +518,15 @@ export function useConcursos() {
             for (const disciplina of concursoCompleto.disciplinas) {
               if (disciplina.topicos) {
                 for (const topico of disciplina.topicos) {
-                  if (topico.name.toLowerCase().includes(sessao.topico.toLowerCase()) ||
-                      sessao.topico.toLowerCase().includes(topico.name.toLowerCase())) {
-                    topicosComSessoes.add(topico.id || topico.name)
+                  if (
+                    topico.name
+                      .toLowerCase()
+                      .includes(sessao.topico.toLowerCase()) ||
+                    sessao.topico
+                      .toLowerCase()
+                      .includes(topico.name.toLowerCase())
+                  ) {
+                    topicosComSessoes.add(topico.id || topico.name);
                   }
                 }
               }
@@ -416,13 +536,13 @@ export function useConcursos() {
       }
 
       // Calculate progress percentage
-      if (totalTopicos === 0) return 0
-      return Math.round((topicosComSessoes.size / totalTopicos) * 100)
+      if (totalTopicos === 0) return 0;
+      return Math.round((topicosComSessoes.size / totalTopicos) * 100);
     } catch (error) {
-      console.error("Error calculating competition progress:", error)
-      return 0
+      console.error("Error calculating competition progress:", error);
+      return 0;
     }
-  }
+  };
 
   return {
     concursos,
@@ -440,5 +560,5 @@ export function useConcursos() {
     buscarSimuladosConcurso,
     marcarSimuladoFavorito,
     calcularProgressoConcurso,
-  }
+  };
 }

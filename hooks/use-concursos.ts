@@ -25,7 +25,7 @@ export function useConcursos() {
       setLoading(true)
       const { data, error } = await supabase
         .from("competitions")
-        .select("*")
+        .select("id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
@@ -45,7 +45,7 @@ export function useConcursos() {
       // Fetch competition
       const { data: concursoData, error: concursoError } = await supabase
         .from("competitions")
-        .select("*")
+        .select("id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at")
         .eq("id", id)
         .eq("user_id", user.id)
         .single()
@@ -56,8 +56,8 @@ export function useConcursos() {
       const { data: disciplinasComTopicos, error: disciplinasError } = await supabase
         .from("competition_subjects")
         .select(`
-          *,
-          topicos:competition_topics(*)
+          id, competition_id, name, progress, created_at, updated_at,
+          topicos:competition_topics(id, subject_id, name, completed, created_at, updated_at)
         `)
         .eq("competition_id", id)
         .order("created_at", { ascending: true })
@@ -109,7 +109,7 @@ export function useConcursos() {
           edital_link: concursoSanitizado.edital_link,
           status: concursoSanitizado.status,
         })
-        .select()
+        .select("id")
         .single()
 
       if (concursoError) throw concursoError
@@ -124,7 +124,7 @@ export function useConcursos() {
               name: disciplina.name,
               progress: 0,
             })
-            .select()
+            .select("id")
             .single()
 
           if (disciplinaError) throw disciplinaError
@@ -267,7 +267,9 @@ export function useConcursos() {
           difficulty: questaoSanitizada.difficulty,
           is_ai_generated: questaoSanitizada.is_ai_generated || false,
         })
-        .select()
+        .select(
+          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at"
+        )
         .single()
 
       if (error) throw error
@@ -284,7 +286,9 @@ export function useConcursos() {
     try {
       const { data, error } = await supabase
         .from("competition_questions")
-        .select("*")
+        .select(
+          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at"
+        )
         .eq("competition_id", concursoId)
         .order("created_at", { ascending: false })
 
@@ -310,7 +314,7 @@ export function useConcursos() {
           questions: simulado.questions,
           is_favorite: simulado.is_favorite || false,
         })
-        .select()
+        .select("id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at")
         .single()
 
       if (error) throw error
@@ -327,7 +331,7 @@ export function useConcursos() {
     try {
       const { data, error } = await supabase
         .from("competition_simulations")
-        .select("*")
+        .select("id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at")
         .eq("competition_id", concursoId)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
@@ -368,12 +372,15 @@ export function useConcursos() {
       // Get all study sessions for this competition
       const { data: sessoesData, error: sessoesError } = await supabase
         .from("study_sessions")
-        .select("*")
+        .select("id, user_id, competition_id, topic, completed")
         .eq("user_id", user.id)
         .eq("competition_id", concursoId)
         .eq("completed", true)
 
       if (sessoesError) throw sessoesError
+
+      // Map DB field 'topic' -> local 'topico' to keep frontend naming consistent
+      const sessoes = (sessoesData || []).map((s) => ({ ...s, topico: s.topic }))
 
       // Get competition details with subjects and topics
       const concursoCompleto = await fetchConcursoCompleto(concursoId)
@@ -390,15 +397,15 @@ export function useConcursos() {
       }
 
       // Count topics that have study sessions
-      if (sessoesData && sessoesData.length > 0) {
-        for (const sessao of sessoesData) {
-          if (sessao.topic) {
+      if (sessoes && sessoes.length > 0) {
+        for (const sessao of sessoes) {
+          if (sessao.topico) {
             // Map session topic to actual topics by partial match
             for (const disciplina of concursoCompleto.disciplinas) {
               if (disciplina.topicos) {
                 for (const topico of disciplina.topicos) {
-                  if (topico.name.toLowerCase().includes(sessao.topic.toLowerCase()) ||
-                      sessao.topic.toLowerCase().includes(topico.name.toLowerCase())) {
+                  if (topico.name.toLowerCase().includes(sessao.topico.toLowerCase()) ||
+                      sessao.topico.toLowerCase().includes(topico.name.toLowerCase())) {
                     topicosComSessoes.add(topico.id || topico.name)
                   }
                 }

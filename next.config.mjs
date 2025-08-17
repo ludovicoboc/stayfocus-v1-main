@@ -1,31 +1,35 @@
 /** @type {import('next').NextConfig} */
+const isCI = process.env.CI === "true";
+
 const nextConfig = {
-  // Remover configurações que ignoram erros - deixar ESLint e TypeScript funcionarem
+  // Configurações condicionais para CI vs desenvolvimento local
+  typescript: { ignoreBuildErrors: !isCI },
+  eslint: { ignoreDuringBuilds: !isCI },
   images: {
     unoptimized: true,
   },
   // Adicionar configurações de performance
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    optimizePackageImports: ["lucide-react", "@radix-ui/react-icons"],
   },
   // Configurações para melhor compatibilidade com navegador Windsurf
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: "/(.*)",
         headers: [
           {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
           },
           {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
+            key: "X-Content-Type-Options",
+            value: "nosniff",
           },
         ],
       },
-    ]
+    ];
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;

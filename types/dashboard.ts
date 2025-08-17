@@ -5,6 +5,7 @@ export interface AtividadePainelDia {
   cor: string
   concluida: boolean
   created_at: string
+  date: string
 }
 
 export interface Prioridade {
@@ -13,6 +14,7 @@ export interface Prioridade {
   importante: boolean
   concluida: boolean
   created_at: string
+  date: string
 }
 
 export interface Medicamento {
@@ -21,6 +23,7 @@ export interface Medicamento {
   horario?: string
   tomado: boolean
   created_at: string
+  date: string
 }
 
 export interface SessaoFocoDashboard {
@@ -30,4 +33,5 @@ export interface SessaoFocoDashboard {
   ativa: boolean
   pausada: boolean
   created_at: string
+  date: string
 }

@@ -5,9 +5,11 @@ import { useDashboard } from "@/hooks/use-dashboard"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Play, Pause, Square } from "lucide-react"
+import { getCurrentDateString } from "@/lib/utils"
 
-export function TemporizadorFocoDashboard() {
-  const { dashboardData, iniciarSessaoFoco, pausarSessaoFoco, pararSessaoFoco } = useDashboard()
+export function TemporizadorFocoDashboard({ date }: { date?: string }) {
+  const resolvedDate = date || getCurrentDateString()
+  const { dashboardData, iniciarSessaoFoco, pausarSessaoFoco, pararSessaoFoco } = useDashboard(resolvedDate)
   const [tempoLocal, setTempoLocal] = useState(0)
 
   const sessaoAtiva = dashboardData?.sessaoFoco

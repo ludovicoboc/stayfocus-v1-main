@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import type { AtividadePainelDia, Prioridade, Medicamento, SessaoFocoDashboard } from "@/types/dashboard"
 import { sanitizeString } from "@/utils/validations"
+import { getCurrentDateString } from "@/lib/utils"
 
 interface DashboardData {
   painelDia: AtividadePainelDia[]
@@ -18,7 +19,7 @@ interface DashboardError {
   type: 'loading' | 'crud' | 'validation'
 }
 
-export function useDashboard() {
+export function useDashboard(date?: string) {
   const { user } = useAuth()
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     painelDia: [],
@@ -29,6 +30,7 @@ export function useDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<DashboardError | null>(null)
   const supabase = useMemo(() => createClient(), [])
+  const resolvedDate = useMemo(() => date || getCurrentDateString(), [date])
 
   // Validação de dados
   const validarAtividade = useCallback((atividade: { horario: string; atividade: string; cor: string }) => {
@@ -61,6 +63,7 @@ export function useDashboard() {
       
       setLoading(true)
       setError(null)
+      const targetDate = date || getCurrentDateString()
 
       // Executar todas as queries em paralelo para melhor performance
       const [painelDiaResult, prioridadesResult, medicamentosResult, sessaoFocoResult] = await Promise.all([
@@ -68,21 +71,25 @@ export function useDashboard() {
           .from("painel_dia")
           .select("*")
           .eq("user_id", user.id)
+          .eq("date", targetDate)
           .order("horario", { ascending: true }),
         supabase
           .from("prioridades")
           .select("*")
           .eq("user_id", user.id)
+          .eq("date", targetDate)
           .order("created_at", { ascending: false }),
         supabase
           .from("medicamentos")
           .select("*")
           .eq("user_id", user.id)
+          .eq("date", targetDate)
           .order("horario", { ascending: true }),
         supabase
           .from("sessoes_foco")
           .select("*")
           .eq("user_id", user.id)
+          .eq("date", targetDate)
           .eq("ativa", true)
           .maybeSingle() // Usar maybeSingle ao invés de single para evitar erro se não houver dados
       ])
@@ -108,7 +115,7 @@ export function useDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [user, supabase])
+  }, [user, supabase, date])
 
   const adicionarAtividade = useCallback(async (atividade: { horario: string; atividade: string; cor: string }) => {
     try {
@@ -120,6 +127,7 @@ export function useDashboard() {
       validarAtividade(atividade)
       setError(null)
 
+      const targetDate = date || getCurrentDateString()
       const atividadeSanitizada = {
         horario: atividade.horario.trim(),
         atividade: sanitizeString(atividade.atividade),
@@ -133,6 +141,7 @@ export function useDashboard() {
             ...atividadeSanitizada,
             user_id: user.id,
             concluida: false,
+            date: targetDate,
           },
         ])
         .select()
@@ -153,7 +162,7 @@ export function useDashboard() {
       })
       throw error
     }
-  }, [user, supabase, validarAtividade])
+  }, [user, supabase, validarAtividade, date])
 
   const toggleAtividadeConcluida = useCallback(async (id: string, concluida: boolean) => {
     try {
@@ -190,6 +199,7 @@ export function useDashboard() {
       validarPrioridade(prioridade)
       setError(null)
 
+      const targetDate = date || getCurrentDateString()
       const prioridadeSanitizada = {
         titulo: sanitizeString(prioridade.titulo),
         importante: prioridade.importante,
@@ -202,6 +212,7 @@ export function useDashboard() {
             ...prioridadeSanitizada,
             concluida: false,
             user_id: user.id,
+            date: targetDate,
           },
         ])
         .select()
@@ -222,7 +233,7 @@ export function useDashboard() {
       })
       throw error
     }
-  }, [user, supabase, validarPrioridade])
+  }, [user, supabase, validarPrioridade, date])
 
   const togglePrioridadeConcluida = useCallback(async (id: string, concluida: boolean) => {
     try {
@@ -271,6 +282,7 @@ export function useDashboard() {
         .eq("ativa", true)
 
       // Criar nova sessão
+      const targetDate = date || getCurrentDateString()
       const { data, error } = await supabase
         .from("sessoes_foco")
         .insert([
@@ -280,6 +292,7 @@ export function useDashboard() {
             tempo_restante: duracaoMinutos * 60,
             ativa: true,
             pausada: false,
+            date: targetDate,
           },
         ])
         .select()
@@ -299,7 +312,7 @@ export function useDashboard() {
       })
       throw error
     }
-  }, [user, supabase])
+  }, [user, supabase, date])
 
   const pausarSessaoFoco = useCallback(async () => {
     try {
@@ -374,5 +387,6 @@ export function useDashboard() {
     pararSessaoFoco,
     recarregarDados: carregarDados,
     limparErro: useCallback(() => setError(null), []),
+    currentDate: resolvedDate,
   }
 }

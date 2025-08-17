@@ -1,17 +1,29 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useDashboard } from "@/hooks/use-dashboard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Plus, Star, Target } from "lucide-react"
+import { getCurrentDateString } from "@/lib/utils"
 
-export function PrioridadesDia() {
-  const { dashboardData, adicionarPrioridade, togglePrioridadeConcluida } = useDashboard()
+export function PrioridadesDia({ date }: { date?: string }) {
+  const [currentDate, setCurrentDate] = useState<string>(date || getCurrentDateString())
+  const { dashboardData, adicionarPrioridade, togglePrioridadeConcluida } = useDashboard(currentDate)
   const [novaPrioridade, setNovaPrioridade] = useState({ titulo: "", importante: false })
   const [dialogAberto, setDialogAberto] = useState(false)
+
+  const shiftDate = (base: string, delta: number) => {
+    const d = new Date(base + "T00:00:00Z")
+    d.setUTCDate(d.getUTCDate() + delta)
+    return d.toISOString().split("T")[0]
+  }
+
+  useEffect(() => {
+    setCurrentDate(date || getCurrentDateString())
+  }, [date])
 
   const handleAdicionarPrioridade = async () => {
     if (!novaPrioridade.titulo.trim()) return
@@ -37,7 +49,15 @@ export function PrioridadesDia() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Prioridades</h3>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => setCurrentDate(shiftDate(currentDate, -1))}>
+            Ontem
+          </Button>
+          <h3 className="text-lg font-semibold text-white">Prioridades • {currentDate}</h3>
+          <Button size="sm" variant="outline" className="border-slate-600 text-slate-300" onClick={() => setCurrentDate(shiftDate(currentDate, 1))}>
+            Amanhã
+          </Button>
+        </div>
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
             <Button size="sm" className="bg-orange-600 hover:bg-orange-700">
@@ -113,7 +133,7 @@ export function PrioridadesDia() {
       ) : (
         <div className="text-center py-8">
           <Target className="w-12 h-12 mx-auto mb-3 text-slate-600" />
-          <p className="text-slate-400 mb-4">Nenhuma prioridade definida para hoje</p>
+          <p className="text-slate-400 mb-4">Nenhuma prioridade definida para {currentDate}</p>
           <p className="text-sm text-slate-500">Adicione suas tarefas mais importantes</p>
         </div>
       )}

@@ -20,8 +20,8 @@ export function RegistroEstudos() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [sessaoEditando, setSessaoEditando] = useState<SessaoEstudo | null>(null)
   const [novaSessao, setNovaSessao] = useState({
-    subject: "",
-    topic: "",
+    disciplina: "",
+    topico: "",
     duration_minutes: 25,
     notes: "",
     competition_id: null as string | null,
@@ -30,11 +30,11 @@ export function RegistroEstudos() {
   const estatisticas = getEstatisticas()
 
   const handleAddSessao = async () => {
-    if (!novaSessao.subject.trim()) return
+    if (!novaSessao.disciplina.trim()) return
 
     const sessao: Omit<SessaoEstudo, "id" | "user_id" | "created_at" | "updated_at"> = {
-      subject: novaSessao.subject.trim(),
-      topic: novaSessao.topic.trim() || null,
+      disciplina: novaSessao.disciplina.trim(),
+      topico: novaSessao.topico.trim() || null,
       duration_minutes: novaSessao.duration_minutes,
       completed: false,
       pomodoro_cycles: 0,
@@ -48,8 +48,8 @@ export function RegistroEstudos() {
     if (result) {
       setShowAddModal(false)
       setNovaSessao({
-        subject: "",
-        topic: "",
+        disciplina: "",
+        topico: "",
         duration_minutes: 25,
         notes: "",
         competition_id: null,
@@ -63,11 +63,11 @@ export function RegistroEstudos() {
   }
 
   const handleUpdateSessao = async () => {
-    if (!sessaoEditando?.id || !sessaoEditando.subject.trim()) return
+    if (!sessaoEditando?.id || !sessaoEditando.disciplina.trim()) return
 
     const updates = {
-      subject: sessaoEditando.subject.trim(),
-      topic: sessaoEditando.topic?.trim() || null,
+      disciplina: sessaoEditando.disciplina.trim(),
+      topico: sessaoEditando.topico?.trim() || null,
       duration_minutes: sessaoEditando.duration_minutes,
       notes: sessaoEditando.notes?.trim() || null,
       competition_id: sessaoEditando.competition_id,
@@ -133,8 +133,8 @@ export function RegistroEstudos() {
                     <div
                       className={`text-sm font-medium ${sessao.completed ? "text-slate-400 line-through" : "text-white"}`}
                     >
-                      {sessao.subject}
-                      {sessao.topic && ` - ${sessao.topic}`}
+                      {sessao.disciplina}
+                      {sessao.topico && ` - ${sessao.topico}`}
                     </div>
                     <div className="text-xs text-slate-400 flex items-center">
                       <Clock className="w-3 h-3 mr-1" />
@@ -186,27 +186,27 @@ export function RegistroEstudos() {
 
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="subject" className="text-slate-300">
+              <Label htmlFor="disciplina" className="text-slate-300">
                 Matéria *
               </Label>
               <Input
-                id="subject"
+                id="disciplina"
                 placeholder="Ex: Matemática"
-                value={novaSessao.subject}
-                onChange={(e) => setNovaSessao({ ...novaSessao, subject: e.target.value })}
+                value={novaSessao.disciplina}
+                onChange={(e) => setNovaSessao({ ...novaSessao, disciplina: e.target.value })}
                 className="bg-slate-700 border-slate-600 text-white"
               />
             </div>
 
             <div>
-              <Label htmlFor="topic" className="text-slate-300">
+              <Label htmlFor="topico" className="text-slate-300">
                 Tópico (opcional)
               </Label>
               <Input
-                id="topic"
+                id="topico"
                 placeholder="Ex: Álgebra Linear"
-                value={novaSessao.topic}
-                onChange={(e) => setNovaSessao({ ...novaSessao, topic: e.target.value })}
+                value={novaSessao.topico}
+                onChange={(e) => setNovaSessao({ ...novaSessao, topico: e.target.value })}
                 className="bg-slate-700 border-slate-600 text-white"
               />
             </div>
@@ -279,7 +279,7 @@ export function RegistroEstudos() {
             </Button>
             <Button
               onClick={handleAddSessao}
-              disabled={!novaSessao.subject.trim()}
+              disabled={!novaSessao.disciplina.trim()}
               className="bg-blue-600 hover:bg-blue-700"
             >
               Adicionar Sessão
@@ -297,30 +297,30 @@ export function RegistroEstudos() {
 
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="edit-subject" className="text-slate-300">
+              <Label htmlFor="edit-disciplina" className="text-slate-300">
                 Matéria *
               </Label>
               <Input
-                id="edit-subject"
+                id="edit-disciplina"
                 placeholder="Ex: Matemática"
-                value={sessaoEditando?.subject || ""}
+                value={sessaoEditando?.disciplina || ""}
                 onChange={(e) => setSessaoEditando(prev => 
-                  prev ? { ...prev, subject: e.target.value } : null
+                  prev ? { ...prev, disciplina: e.target.value } : null
                 )}
                 className="bg-slate-700 border-slate-600 text-white"
               />
             </div>
 
             <div>
-              <Label htmlFor="edit-topic" className="text-slate-300">
+              <Label htmlFor="edit-topico" className="text-slate-300">
                 Tópico (opcional)
               </Label>
               <Input
-                id="edit-topic"
+                id="edit-topico"
                 placeholder="Ex: Álgebra Linear"
-                value={sessaoEditando?.topic || ""}
+                value={sessaoEditando?.topico || ""}
                 onChange={(e) => setSessaoEditando(prev => 
-                  prev ? { ...prev, topic: e.target.value } : null
+                  prev ? { ...prev, topico: e.target.value } : null
                 )}
                 className="bg-slate-700 border-slate-600 text-white"
               />
@@ -396,7 +396,7 @@ export function RegistroEstudos() {
             </Button>
             <Button
               onClick={handleUpdateSessao}
-              disabled={!sessaoEditando?.subject?.trim()}
+              disabled={!sessaoEditando?.disciplina?.trim()}
               className="bg-blue-600 hover:bg-blue-700"
             >
               Salvar Alterações

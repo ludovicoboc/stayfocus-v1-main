@@ -25,12 +25,29 @@ export function useEstudos() {
       setLoading(true)
       const { data, error } = await supabase
         .from("study_sessions")
-        .select("*")
+        .select(
+          "id, user_id, competition_id, subject, topic, duration_minutes, completed, pomodoro_cycles, notes, started_at, completed_at, created_at, updated_at"
+        )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
       if (error) throw error
-      setSessoes(data || [])
+      const mapped: SessaoEstudo[] = (data || []).map((s: any) => ({
+        id: s.id,
+        user_id: s.user_id,
+        competition_id: s.competition_id,
+        disciplina: s.subject,
+        topico: s.topic,
+        duration_minutes: s.duration_minutes,
+        completed: s.completed,
+        pomodoro_cycles: s.pomodoro_cycles,
+        notes: s.notes,
+        started_at: s.started_at,
+        completed_at: s.completed_at,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+      }))
+      setSessoes(mapped)
     } catch (error) {
       console.error("Error fetching study sessions:", error)
     } finally {
@@ -45,7 +62,7 @@ export function useEstudos() {
       // Sanitizar dados de entrada
       const sessaoSanitizada = {
         ...sessao,
-        topic: sanitizeString(sessao.topic),
+        topico: sanitizeString(sessao.topico),
         duration_minutes: sanitizeNumber(sessao.duration_minutes),
         pomodoro_cycles: sanitizeNumber(sessao.pomodoro_cycles) || 0,
         notes: sessao.notes ? sanitizeString(sessao.notes) : undefined,
@@ -58,15 +75,41 @@ export function useEstudos() {
         .from("study_sessions")
         .insert({
           user_id: user.id,
-          ...sessaoSanitizada,
+          subject: sessaoSanitizada.disciplina,
+          topic: sessaoSanitizada.topico,
+          duration_minutes: sessaoSanitizada.duration_minutes,
+          completed: false,
+          pomodoro_cycles: sessaoSanitizada.pomodoro_cycles,
+          notes: sessaoSanitizada.notes,
+          competition_id: sessaoSanitizada.competition_id,
+          started_at: new Date().toISOString(),
+          completed_at: null,
         })
-        .select()
+        .select(
+          "id, user_id, competition_id, subject, topic, duration_minutes, completed, pomodoro_cycles, notes, started_at, completed_at, created_at, updated_at"
+        )
         .single()
 
       if (error) throw error
 
-      setSessoes([data, ...sessoes])
-      return data
+      const mapped: SessaoEstudo = {
+        id: data.id,
+        user_id: data.user_id,
+        competition_id: data.competition_id,
+        disciplina: data.subject,
+        topico: data.topic,
+        duration_minutes: data.duration_minutes,
+        completed: data.completed,
+        pomodoro_cycles: data.pomodoro_cycles,
+        notes: data.notes,
+        started_at: data.started_at,
+        completed_at: data.completed_at,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      }
+
+      setSessoes([mapped, ...sessoes])
+      return mapped
     } catch (error) {
       console.error("Error adding study session:", error)
       return null
@@ -77,20 +120,49 @@ export function useEstudos() {
     if (!user) return false
 
     try {
+      // Map frontend fields to DB columns
+      const dbUpdates: any = {
+        updated_at: new Date().toISOString(),
+      }
+      if (updates.disciplina !== undefined) dbUpdates.subject = sanitizeString(updates.disciplina)
+      if (updates.topico !== undefined) dbUpdates.topic = sanitizeString(updates.topico)
+      if (updates.duration_minutes !== undefined)
+        dbUpdates.duration_minutes = sanitizeNumber(updates.duration_minutes)
+      if (updates.notes !== undefined) dbUpdates.notes = updates.notes ? sanitizeString(updates.notes) : null
+      if (updates.competition_id !== undefined) dbUpdates.competition_id = updates.competition_id
+      if (updates.completed !== undefined) dbUpdates.completed = updates.completed
+      if (updates.pomodoro_cycles !== undefined)
+        dbUpdates.pomodoro_cycles = sanitizeNumber(updates.pomodoro_cycles)
+
       const { data, error } = await supabase
         .from("study_sessions")
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
+        .update(dbUpdates)
         .eq("id", id)
         .eq("user_id", user.id)
-        .select()
+        .select(
+          "id, user_id, competition_id, subject, topic, duration_minutes, completed, pomodoro_cycles, notes, started_at, completed_at, created_at, updated_at"
+        )
         .single()
 
       if (error) throw error
 
-      setSessoes(sessoes.map((s) => (s.id === id ? data : s)))
+      const mapped: SessaoEstudo = {
+        id: data.id,
+        user_id: data.user_id,
+        competition_id: data.competition_id,
+        disciplina: data.subject,
+        topico: data.topic,
+        duration_minutes: data.duration_minutes,
+        completed: data.completed,
+        pomodoro_cycles: data.pomodoro_cycles,
+        notes: data.notes,
+        started_at: data.started_at,
+        completed_at: data.completed_at,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      }
+
+      setSessoes(sessoes.map((s) => (s.id === id ? mapped : s)))
       return true
     } catch (error) {
       console.error("Error updating study session:", error)

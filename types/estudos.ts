@@ -2,8 +2,8 @@ export interface SessaoEstudo {
   id?: string
   user_id?: string
   competition_id?: string | null
-  subject: string
-  topic?: string | null
+  disciplina: string
+  topico?: string | null
   duration_minutes: number
   completed: boolean
   pomodoro_cycles: number

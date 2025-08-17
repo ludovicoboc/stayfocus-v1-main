@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { sanitizeString, sanitizeDate } from "@/utils/validations"
+import { getCurrentDateString } from "@/lib/utils"
 
 export interface Compromisso {
   id: string
@@ -14,7 +15,7 @@ export interface Compromisso {
   concluido: boolean
 }
 
-export function useCompromissos() {
+export function useCompromissos(date?: string) {
   const { user } = useAuth()
   const [compromissos, setCompromissos] = useState<Compromisso[]>([])
   const [loading, setLoading] = useState(true)
@@ -25,13 +26,13 @@ export function useCompromissos() {
       if (!user) return // ✅ Verificar autenticação
       
       setLoading(true)
-      const hoje = new Date().toISOString().split('T')[0]
+      const targetDate = date || getCurrentDateString()
       
       const { data, error } = await supabase
         .from("compromissos")
         .select("*")
         .eq("user_id", user.id) // ✅ Filtrar por user_id
-        .eq("data", hoje)
+        .eq("data", targetDate)
         .order("horario", { ascending: true })
 
       if (error) throw error
@@ -40,13 +41,14 @@ export function useCompromissos() {
     } catch (error) {
       console.error("Erro ao carregar compromissos:", error)
       // Dados de fallback para desenvolvimento
+      const fallbackDate = date || getCurrentDateString()
       setCompromissos([
         {
           id: "1",
           titulo: "Consulta médica",
           horario: "14:00",
           tipo: "saude",
-          data: new Date().toISOString().split('T')[0],
+          data: fallbackDate,
           concluido: false,
         },
         {
@@ -54,7 +56,7 @@ export function useCompromissos() {
           titulo: "Estudar matemática",
           horario: "16:00",
           tipo: "estudos",
-          data: new Date().toISOString().split('T')[0],
+          data: fallbackDate,
           concluido: false,
         },
         {
@@ -62,7 +64,7 @@ export function useCompromissos() {
           titulo: "Preparar jantar",
           horario: "18:30",
           tipo: "alimentacao",
-          data: new Date().toISOString().split('T')[0],
+          data: fallbackDate,
           concluido: false,
         },
       ])

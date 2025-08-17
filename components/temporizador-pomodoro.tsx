@@ -78,8 +78,8 @@ export function TemporizadorPomodoro() {
             <div className="bg-blue-800 rounded-lg p-3 mb-4">
               <div className="text-blue-100 text-sm font-medium mb-1">Conectado à sessão:</div>
               <div className="text-blue-100 text-xs">
-                {linkedSession.subject}
-                {linkedSession.topic && ` - ${linkedSession.topic}`}
+                {linkedSession.disciplina}
+                {linkedSession.topico && ` - ${linkedSession.topico}`}
               </div>
             </div>
           )}
@@ -261,8 +261,8 @@ export function TemporizadorPomodoro() {
                     </SelectItem>
                     {availableSessions.map((sessao) => (
                       <SelectItem key={sessao.id} value={sessao.id!} className="text-white">
-                        {sessao.subject}
-                        {sessao.topic && ` - ${sessao.topic}`}
+                        {sessao.disciplina}
+                        {sessao.topico && ` - ${sessao.topico}`}
                         {` (${sessao.duration_minutes} min)`}
                       </SelectItem>
                     ))}
@@ -278,8 +278,8 @@ export function TemporizadorPomodoro() {
             {linkedSession && (
               <div className="bg-slate-700 rounded-lg p-3">
                 <div className="text-slate-300 text-sm">
-                  <strong>Sessão atual:</strong> {linkedSession.subject}
-                  {linkedSession.topic && ` - ${linkedSession.topic}`}
+                  <strong>Sessão atual:</strong> {linkedSession.disciplina}
+                  {linkedSession.topico && ` - ${linkedSession.topico}`}
                 </div>
                 <div className="text-slate-400 text-xs mt-1">
                   Ciclos completados: {linkedSession.pomodoro_cycles || 0}

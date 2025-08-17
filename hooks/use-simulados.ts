@@ -28,7 +28,7 @@ export function useSimulados() {
     try {
       const { data, error } = await supabase
         .from("simulation_history")
-        .select("*")
+        .select("id, user_id, simulation_id, score, total_questions, percentage, time_taken_minutes, answers, completed_at, created_at")
         .eq("user_id", user.id)
         .order("completed_at", { ascending: false })
         .limit(20)
@@ -47,12 +47,13 @@ export function useSimulados() {
     setError(null)
 
     try {
-      // Fetch questions from the competition
+      // Fetch random questions from RPC
       const { data: questoes, error: questoesError } = await supabase
-        .from("competition_questions")
-        .select("*")
-        .eq("competition_id", concursoId)
-        .limit(numeroQuestoes)
+        .rpc("random_competition_questions", {
+          competition_id: concursoId,
+          n: numeroQuestoes,
+          difficulties: null,
+        })
 
       if (questoesError) throw questoesError
 
@@ -82,7 +83,7 @@ export function useSimulados() {
           totalQuestoes: questoes.length,
           autor: "StayFocus",
         },
-        questoes: questoes.map((q, index) => ({
+        questoes: questoes.map((q: any, index: number) => ({
           id: index + 1,
           enunciado: q.question_text,
           alternativas: q.options?.reduce((acc: any, opt: any, idx: number) => {
@@ -90,13 +91,29 @@ export function useSimulados() {
             acc[letter] = opt.text
             return acc
           }, {}) || { a: "Opção A", b: "Opção B", c: "Opção C", d: "Opção D" },
-          gabarito: q.correct_answer || "a",
+          gabarito: (() => {
+            // Prefer isCorrect flag on options
+            if (Array.isArray(q.options) && q.options.length > 0) {
+              const idx = q.options.findIndex((opt: any) => opt?.isCorrect === true)
+              if (idx >= 0) return String.fromCharCode(97 + idx)
+              // Fallback: match correct_answer text to option text
+              if (q.correct_answer) {
+                const idxByText = q.options.findIndex((opt: any) => opt?.text === q.correct_answer)
+                if (idxByText >= 0) return String.fromCharCode(97 + idxByText)
+              }
+            }
+            // Ultimate fallback
+            return "a"
+          })(),
           assunto: q.topic_id || undefined,
           explicacao: q.explanation || undefined,
         })),
       }
 
-      return await carregarSimulado(simuladoData, concursoId)
+      // Save only DB question IDs in competition_simulations
+      const questionIds: string[] = questoes.map((q: any) => q.id)
+
+      return await carregarSimulado(simuladoData, concursoId, questionIds)
     } catch (error) {
       console.error("Error generating simulation:", error)
       setError("Erro ao gerar simulado. Tente novamente.")
@@ -106,7 +123,7 @@ export function useSimulados() {
     }
   }
 
-  const carregarSimulado = async (data: SimuladoData, concursoId?: string) => {
+  const carregarSimulado = async (data: SimuladoData, concursoId?: string, questionIds: string[] = []) => {
     if (!user) return false
 
     setLoading(true)
@@ -119,26 +136,44 @@ export function useSimulados() {
         return false
       }
 
+      // competition_id é obrigatório no schema de competition_simulations
+      if (!concursoId) {
+        setError("Concurso obrigatório para salvar o simulado.")
+        return false
+      }
+
       // Create simulation in database
       const { data: simulado, error: simuladoError } = await supabase
-        .from("simulations")
+        .from("competition_simulations")
         .insert({
           user_id: user.id,
-          competition_id: concursoId || null,
+          competition_id: concursoId,
           title: data.metadata.titulo,
-          metadata: data.metadata,
-          questions: data.questoes,
-          total_questions: data.questoes.length,
-          user_answers: {},
-          score: 0,
-          completed: false,
+          questions: questionIds,
+          results: null,
+          is_favorite: false,
         })
-        .select()
+        .select("id, created_at, updated_at")
         .single()
 
       if (simuladoError) throw simuladoError
 
-      setSimuladoAtual(simulado)
+      // Mantém no estado os dados completos do simulado para uso na UI,
+      // mas utiliza o id gerado pela tabela competition_simulations
+      setSimuladoAtual({
+        id: simulado.id,
+        user_id: user.id,
+        competition_id: concursoId,
+        title: data.metadata.titulo,
+        metadata: data.metadata,
+        questions: data.questoes,
+        user_answers: {},
+        score: 0,
+        total_questions: data.questoes.length,
+        completed: false,
+        created_at: simulado.created_at,
+        updated_at: simulado.updated_at,
+      })
       setStatus("reviewing")
       return true
     } catch (error) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "./use-auth"
 import type {
@@ -16,10 +16,12 @@ import type {
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { validateMedicamento, validateRegistroHumor, validateData, sanitizeString, sanitizeArray, sanitizeDate } from "@/utils/validations"
+import { getCurrentDateString } from "@/lib/utils"
 
-export function useSaude() {
+export function useSaude(date?: string) {
   const supabase = createClient()
   const { user } = useAuth()
+  const resolvedDate = useMemo(() => date || getCurrentDateString(), [date])
 
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([])
   const [registrosHumor, setRegistrosHumor] = useState<RegistroHumor[]>([])
@@ -41,11 +43,10 @@ export function useSaude() {
     if (!user) return
 
     try {
-      const hoje = new Date().toISOString().split('T')[0]
       const { data, error } = await supabase
         .from("medicamentos_tomados")
         .select("*")
-        .eq("data_tomada", hoje)
+        .eq("data_tomada", resolvedDate)
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -54,7 +55,7 @@ export function useSaude() {
     } catch (error) {
       console.error("Erro ao carregar medicamentos tomados:", error)
     }
-  }, [supabase, user])
+  }, [supabase, user, resolvedDate])
 
   // Carregar medicamentos
   const carregarMedicamentos = useCallback(async () => {
@@ -259,11 +260,10 @@ export function useSaude() {
     const total = medicamentos.length
     
     // Calcular medicamentos tomados hoje baseado nos registros
-    const hoje = new Date().toISOString().split('T')[0]
     const medicamentosUnicos = new Set()
     
     medicamentosTomados.forEach((tomado) => {
-      if (tomado.data_tomada === hoje) {
+      if (tomado.data_tomada === resolvedDate) {
         medicamentosUnicos.add(tomado.medicamento_id)
       }
     })
@@ -373,5 +373,6 @@ export function useSaude() {
     carregarRegistrosHumor,
     carregarMedicamentosTomados,
     formatarData,
+    currentDate: resolvedDate,
   }
 }

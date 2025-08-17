@@ -393,14 +393,21 @@ export function validateConcurso(concurso: any): ValidationResult {
 // Validação para sessões de estudo
 export function validateSessaoEstudo(sessao: any): ValidationResult {
   const validator = new DataValidator()
-  
-  return validator.validateFields([
-    { field: 'Tópico', value: sessao.topic, rules: ['required', 'string', 'minLength:2', 'maxLength:200'] },
+
+  const rules: ValidationRule[] = [
+    { field: 'Matéria', value: sessao.disciplina, rules: ['required', 'string', 'minLength:2', 'maxLength:200'] },
+    { field: 'Tópico', value: sessao.topico, rules: ['string', 'maxLength:200'] },
     { field: 'Duração em minutos', value: sessao.duration_minutes, rules: ['required', 'number', 'positive', 'max:1440'] }, // máximo 24h
     { field: 'Ciclos Pomodoro', value: sessao.pomodoro_cycles, rules: ['number', 'min:0', 'max:100'] },
     { field: 'Notas', value: sessao.notes, rules: ['string', 'maxLength:1000'] },
-    { field: 'Concurso ID', value: sessao.competition_id, rules: ['uuid'] }
-  ])
+  ]
+
+  // Validar competition_id apenas se fornecido
+  if (sessao.competition_id) {
+    rules.push({ field: 'Concurso ID', value: sessao.competition_id, rules: ['uuid'] })
+  }
+
+  return validator.validateFields(rules)
 }
 
 // Validação para registro de sono

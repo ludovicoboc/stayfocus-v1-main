@@ -154,21 +154,23 @@ export function exemploValidacaoConcurso() {
 // Exemplo de validação de sessão de estudo
 export function exemploValidacaoSessaoEstudo() {
   const sessaoValida = {
-    topic: 'Matemática - Álgebra Linear',
+    disciplina: 'Matemática',
+    topico: 'Álgebra Linear',
     duration_minutes: 90,
     pomodoro_cycles: 3,
     notes: 'Estudei matrizes e determinantes',
     competition_id: '123e4567-e89b-12d3-a456-426614174000'
   }
-  
+
   const sessaoInvalida = {
-    topic: 'A', // Inválido: muito curto
+    disciplina: 'A', // Inválido: muito curto
+    topico: 'Assunto muito longo que deve estar dentro do limite mas aqui é apenas um exemplo',
     duration_minutes: 2000, // Inválido: mais de 24h
     pomodoro_cycles: -1, // Inválido: negativo
     notes: 'Nota válida',
     competition_id: 'invalid-uuid' // Inválido: UUID inválido
   }
-  
+
   console.log('Sessão válida:', validateSessaoEstudo(sessaoValida))
   console.log('Sessão inválida:', validateSessaoEstudo(sessaoInvalida))
 }

@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Plus, Clock, Check, X } from "lucide-react"
+import { getCurrentDateString } from "@/lib/utils"
 
-export function PainelDia() {
-  const { dashboardData, adicionarAtividadePainelDia, toggleAtividadeConcluida } = useDashboard()
+export function PainelDia({ date }: { date?: string }) {
+  const resolvedDate = date || getCurrentDateString()
+  const { dashboardData, adicionarAtividadePainelDia, toggleAtividadeConcluida } = useDashboard(resolvedDate)
   const [novaAtividade, setNovaAtividade] = useState({ horario: "", atividade: "", cor: "#3b82f6" })
   const [dialogAberto, setDialogAberto] = useState(false)
 

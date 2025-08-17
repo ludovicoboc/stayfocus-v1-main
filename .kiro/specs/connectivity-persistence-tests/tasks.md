@@ -1,6 +1,9 @@
 # Implementation Plan
 
-- [ ] 1. Setup inicial e configuração do ambiente de teste
+- [-] 1. Setup inicial e configuração do ambiente de teste
+
+
+
   - Configurar credenciais de teste e URLs base
   - Inicializar ferramentas Supabase MCP e Playwright
   - Validar conectividade básica com banco e aplicação

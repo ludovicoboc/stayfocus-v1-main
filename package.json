@@ -6,7 +6,12 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "test:connectivity": "cd tests/connectivity-persistence && npx playwright test",
+    "test:connectivity:ui": "cd tests/connectivity-persistence && npx playwright test --ui",
+    "test:connectivity:debug": "cd tests/connectivity-persistence && npx playwright test --debug",
+    "test:setup": "cd tests/connectivity-persistence && npx playwright test setup-validation.spec.ts",
+    "validate:setup": "cd tests/connectivity-persistence && node scripts/validate-setup.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -70,6 +75,7 @@
     "@types/react-dom": "^18.3.1",
     "@typescript-eslint/eslint-plugin": "^8.39.1",
     "@typescript-eslint/parser": "^8.39.1",
+    "dotenv": "^17.2.1",
     "eslint": "^9.33.0",
     "eslint-config-next": "^15.4.6",
     "postcss": "^8.5",

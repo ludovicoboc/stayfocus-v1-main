@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import type { PomodoroState, PomodoroConfig, SessaoPomodoro } from "@/types/estudos"
 
-export function usePomodoro() {
+export function usePomodoro(studySessionId?: string | null) {
   const { user } = useAuth()
   const supabase = createClient()
   const [state, setState] = useState<PomodoroState>("idle")
@@ -74,7 +74,37 @@ export function usePomodoro() {
         sessionRef.current = data
         setCyclesCompleted(data.cycles_completed)
         setCurrentCycle(data.current_cycle)
-        // Note: In a real app, you'd calculate remaining time based on started_at
+        
+        // Calculate remaining time based on started_at
+        if (data.started_at && !data.paused_at && !data.completed_at) {
+          const startTime = new Date(data.started_at).getTime()
+          const currentTime = new Date().getTime()
+          const elapsedSeconds = Math.floor((currentTime - startTime) / 1000)
+          
+          // Determine what duration to use based on cycles completed
+          let sessionDuration: number
+          if (data.cycles_completed % config.cyclesUntilLongBreak === 0 && data.cycles_completed > 0) {
+            sessionDuration = data.long_break_duration * 60 // Long break
+          } else if (data.cycles_completed > 0) {
+            sessionDuration = data.break_duration * 60 // Short break
+          } else {
+            sessionDuration = data.focus_duration * 60 // Focus session
+          }
+          
+          const remainingTime = Math.max(0, sessionDuration - elapsedSeconds)
+          setTimeLeft(remainingTime)
+          
+          if (remainingTime > 0) {
+            // Determine the state based on current cycle
+            if (data.cycles_completed % config.cyclesUntilLongBreak === 0 && data.cycles_completed > 0) {
+              setState("long-break")
+            } else if (data.cycles_completed > 0) {
+              setState("break")
+            } else {
+              setState("focus")
+            }
+          }
+        }
       }
     } catch (error) {
       console.error("Error loading active session:", error)
@@ -103,6 +133,7 @@ export function usePomodoro() {
           .from("pomodoro_sessions")
           .insert({
             user_id: user.id,
+            study_session_id: studySessionId,
             focus_duration: config.focusDuration,
             break_duration: config.breakDuration,
             long_break_duration: config.longBreakDuration,
@@ -123,10 +154,26 @@ export function usePomodoro() {
     }
   }
 
-  const handleTimerComplete = useCallback(() => {
+  const handleTimerComplete = useCallback(async () => {
     if (state === "focus") {
       const newCyclesCompleted = cyclesCompleted + 1
       setCyclesCompleted(newCyclesCompleted)
+
+      // Update study session with completed pomodoro cycles
+      if (studySessionId) {
+        try {
+          await supabase
+            .from("study_sessions")
+            .update({ 
+              pomodoro_cycles: newCyclesCompleted,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", studySessionId)
+            .eq("user_id", user?.id)
+        } catch (error) {
+          console.error("Error updating study session:", error)
+        }
+      }
 
       // Determine next state
       if (newCyclesCompleted % config.cyclesUntilLongBreak === 0) {
@@ -144,7 +191,7 @@ export function usePomodoro() {
       setTimeLeft(config.focusDuration * 60)
       setCurrentCycle(currentCycle + 1)
     }
-  }, [state, cyclesCompleted, currentCycle, config])
+  }, [state, cyclesCompleted, currentCycle, config, studySessionId, user, supabase])
 
   const start = () => {
     if (state === "idle") {

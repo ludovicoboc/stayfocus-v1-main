@@ -5,7 +5,8 @@ export interface AtividadeLazer {
   categoria?: string
   duracao_minutos?: number
   data_realizacao: string
-  notas?: string
+  observacoes?: string
+  avaliacao?: number
   created_at: string
   updated_at: string
 }

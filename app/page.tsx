@@ -5,6 +5,7 @@ import { useDashboard } from "@/hooks/use-dashboard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Calendar,
   Clock,
@@ -13,6 +14,8 @@ import {
   Brain,
   Plus,
   AlertCircle,
+  X,
+  RefreshCw,
 } from "lucide-react"
 import Link from "next/link"
 import { PainelDia } from "@/components/painel-dia"
@@ -25,7 +28,20 @@ import { LoadingScreen } from "@/components/loading-screen"
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
-  const { dashboardData, loading } = useDashboard()
+  const { 
+    dashboardData, 
+    loading, 
+    error, 
+    adicionarAtividadePainelDia,
+    toggleAtividadeConcluida,
+    adicionarPrioridade,
+    togglePrioridadeConcluida,
+    iniciarSessaoFoco,
+    pausarSessaoFoco,
+    pararSessaoFoco,
+    recarregarDados,
+    limparErro
+  } = useDashboard()
 
   if (authLoading || loading) {
     return <LoadingScreen />
@@ -51,12 +67,38 @@ export default function DashboardPage() {
     )
   }
 
-  // Dados movidos para componentes específicos e hooks
-
   return (
     <div className="flex flex-col h-full">
       {/* Main Content */}
       <main className="flex-1 overflow-auto p-4 sm:p-6">
+        {/* Tratamento de Erros */}
+        {error && (
+          <Alert className="mb-4 bg-red-900/20 border-red-700 text-red-100">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{error.message}</span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={recarregarDados}
+                  className="h-6 px-2 text-red-100 hover:bg-red-800"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={limparErro}
+                  className="h-6 px-2 text-red-100 hover:bg-red-800"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 max-w-none">
           {/* Coluna Principal */}
           <div className="lg:col-span-2 xl:col-span-3 space-y-4 sm:space-y-6">

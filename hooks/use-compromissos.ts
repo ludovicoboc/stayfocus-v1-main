@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
+import { sanitizeString, sanitizeDate } from "@/utils/validations"
 
 export interface Compromisso {
   id: string
@@ -13,18 +15,22 @@ export interface Compromisso {
 }
 
 export function useCompromissos() {
+  const { user } = useAuth()
   const [compromissos, setCompromissos] = useState<Compromisso[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const carregarCompromissos = async () => {
     try {
+      if (!user) return // ✅ Verificar autenticação
+      
       setLoading(true)
       const hoje = new Date().toISOString().split('T')[0]
       
       const { data, error } = await supabase
         .from("compromissos")
         .select("*")
+        .eq("user_id", user.id) // ✅ Filtrar por user_id
         .eq("data", hoje)
         .order("horario", { ascending: true })
 
@@ -67,9 +73,35 @@ export function useCompromissos() {
 
   const adicionarCompromisso = async (compromisso: Omit<Compromisso, "id" | "concluido">) => {
     try {
+      // Sanitizar dados de entrada
+      const compromissoSanitizado = {
+        ...compromisso,
+        titulo: sanitizeString(compromisso.titulo),
+        horario: sanitizeString(compromisso.horario),
+        tipo: sanitizeString(compromisso.tipo),
+        data: sanitizeDate(compromisso.data),
+      }
+
+      // Validações básicas
+      if (!compromissoSanitizado.titulo) {
+        throw new Error("Título é obrigatório")
+      }
+      if (!compromissoSanitizado.horario) {
+        throw new Error("Horário é obrigatório")
+      }
+      if (!compromissoSanitizado.data) {
+        throw new Error("Data é obrigatória")
+      }
+
+      // Validar formato do horário
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+      if (!timeRegex.test(compromissoSanitizado.horario)) {
+        throw new Error("Horário deve ter formato HH:MM")
+      }
+
       const { data, error } = await supabase
         .from("compromissos")
-        .insert([{ ...compromisso, concluido: false }])
+        .insert([{ ...compromissoSanitizado, concluido: false }])
         .select()
         .single()
 

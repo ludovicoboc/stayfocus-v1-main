@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
+import { toast } from "sonner"
 import type {
   HiperfocoProject,
   HiperfocoTask,
@@ -33,7 +34,7 @@ export function useHiperfocos() {
       setLoading(true)
       await Promise.all([fetchProjects(), fetchTasks(), fetchSessions(), fetchAlternationSessions()])
     } catch (error) {
-      console.error("Error fetching hyperfocus data:", error)
+      toast.error("Erro ao carregar dados de hiperfoco. Tente novamente.")
     } finally {
       setLoading(false)
     }
@@ -52,7 +53,7 @@ export function useHiperfocos() {
       if (error) throw error
       setProjects(data || [])
     } catch (error) {
-      console.error("Error fetching projects:", error)
+      toast.error("Erro ao carregar projetos. Verifique sua conexão.")
     }
   }
 
@@ -83,7 +84,7 @@ export function useHiperfocos() {
         })) || [],
       )
     } catch (error) {
-      console.error("Error fetching tasks:", error)
+      toast.error("Erro ao carregar tarefas. Tente recarregar a página.")
     }
   }
 
@@ -100,7 +101,7 @@ export function useHiperfocos() {
       if (error) throw error
       setSessions(data || [])
     } catch (error) {
-      console.error("Error fetching sessions:", error)
+      toast.error("Erro ao carregar sessões de hiperfoco.")
     }
   }
 
@@ -117,7 +118,7 @@ export function useHiperfocos() {
       if (error) throw error
       setAlternationSessions(data || [])
     } catch (error) {
-      console.error("Error fetching alternation sessions:", error)
+      toast.error("Erro ao carregar sessões de alternância.")
     }
   }
 
@@ -137,9 +138,10 @@ export function useHiperfocos() {
       if (error) throw error
 
       setProjects([data, ...projects])
+      toast.success("Projeto criado com sucesso!")
       return data
     } catch (error) {
-      console.error("Error creating project:", error)
+      toast.error("Erro ao criar projeto. Verifique os dados e tente novamente.")
       return null
     }
   }
@@ -151,9 +153,10 @@ export function useHiperfocos() {
       if (error) throw error
 
       setTasks([...tasks, data])
+      toast.success("Tarefa criada com sucesso!")
       return data
     } catch (error) {
-      console.error("Error creating task:", error)
+      toast.error("Erro ao criar tarefa. Verifique os dados e tente novamente.")
       return null
     }
   }
@@ -173,9 +176,10 @@ export function useHiperfocos() {
       if (error) throw error
 
       setTasks(tasks.map((task) => (task.id === id ? data : task)))
+      toast.success("Tarefa atualizada com sucesso!")
       return data
     } catch (error) {
-      console.error("Error updating task:", error)
+      toast.error("Erro ao atualizar tarefa. Tente novamente.")
       return null
     }
   }
@@ -187,9 +191,10 @@ export function useHiperfocos() {
       if (error) throw error
 
       setTasks(tasks.filter((task) => task.id !== id))
+      toast.success("Tarefa excluída com sucesso!")
       return true
     } catch (error) {
-      console.error("Error deleting task:", error)
+      toast.error("Erro ao excluir tarefa. Tente novamente.")
       return false
     }
   }
@@ -210,9 +215,10 @@ export function useHiperfocos() {
       if (error) throw error
 
       setSessions([data, ...sessions])
+      toast.success("Sessão de hiperfoco iniciada!")
       return data
     } catch (error) {
-      console.error("Error creating session:", error)
+      toast.error("Erro ao criar sessão de hiperfoco. Tente novamente.")
       return null
     }
   }
@@ -235,9 +241,10 @@ export function useHiperfocos() {
       if (error) throw error
 
       setAlternationSessions([data, ...alternationSessions])
+      toast.success("Sessão de alternância criada com sucesso!")
       return data
     } catch (error) {
-      console.error("Error creating alternation session:", error)
+      toast.error("Erro ao criar sessão de alternância. Tente novamente.")
       return null
     }
   }
@@ -257,9 +264,10 @@ export function useHiperfocos() {
       if (error) throw error
 
       setAlternationSessions(alternationSessions.map((session) => (session.id === id ? data : session)))
+      toast.success("Sessão de alternância atualizada!")
       return data
     } catch (error) {
-      console.error("Error updating alternation session:", error)
+      toast.error("Erro ao atualizar sessão de alternância. Tente novamente.")
       return null
     }
   }

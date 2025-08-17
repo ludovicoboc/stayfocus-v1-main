@@ -9,16 +9,22 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, CheckCircle, Circle, Clock, Edit, Trash2 } from "lucide-react"
 import { useEstudos } from "@/hooks/use-estudos"
+import { useConcursos } from "@/hooks/use-concursos"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { SessaoEstudo } from "@/types/estudos"
 
 export function RegistroEstudos() {
-  const { sessoes, adicionarSessao, marcarSessaoCompleta, removerSessao, getEstatisticas } = useEstudos()
+  const { sessoes, adicionarSessao, atualizarSessao, marcarSessaoCompleta, removerSessao, getEstatisticas } = useEstudos()
+  const { concursos } = useConcursos()
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [sessaoEditando, setSessaoEditando] = useState<SessaoEstudo | null>(null)
   const [novaSessao, setNovaSessao] = useState({
     subject: "",
     topic: "",
     duration_minutes: 25,
     notes: "",
+    competition_id: null as string | null,
   })
 
   const estatisticas = getEstatisticas()
@@ -33,7 +39,7 @@ export function RegistroEstudos() {
       completed: false,
       pomodoro_cycles: 0,
       notes: novaSessao.notes.trim() || null,
-      competition_id: null,
+      competition_id: novaSessao.competition_id,
       started_at: new Date().toISOString(),
       completed_at: null,
     }
@@ -46,8 +52,37 @@ export function RegistroEstudos() {
         topic: "",
         duration_minutes: 25,
         notes: "",
+        competition_id: null,
       })
     }
+  }
+
+  const handleEditSessao = (sessao: SessaoEstudo) => {
+    setSessaoEditando(sessao)
+    setShowEditModal(true)
+  }
+
+  const handleUpdateSessao = async () => {
+    if (!sessaoEditando?.id || !sessaoEditando.subject.trim()) return
+
+    const updates = {
+      subject: sessaoEditando.subject.trim(),
+      topic: sessaoEditando.topic?.trim() || null,
+      duration_minutes: sessaoEditando.duration_minutes,
+      notes: sessaoEditando.notes?.trim() || null,
+      competition_id: sessaoEditando.competition_id,
+    }
+
+    const result = await atualizarSessao(sessaoEditando.id, updates)
+    if (result) {
+      setShowEditModal(false)
+      setSessaoEditando(null)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setShowEditModal(false)
+    setSessaoEditando(null)
   }
 
   const handleToggleComplete = async (sessao: SessaoEstudo) => {
@@ -113,9 +148,8 @@ export function RegistroEstudos() {
                     size="sm"
                     variant="ghost"
                     className="text-slate-400 hover:text-white"
-                    onClick={() => {
-                      // TODO: Implement edit functionality
-                    }}
+                    onClick={() => handleEditSessao(sessao)}
+                    disabled={sessao.completed}
                   >
                     <Edit className="w-4 h-4" />
                   </Button>
@@ -195,6 +229,32 @@ export function RegistroEstudos() {
             </div>
 
             <div>
+              <Label htmlFor="competition" className="text-slate-300">
+                Concurso (opcional)
+              </Label>
+              <Select
+                value={novaSessao.competition_id || "none"}
+                onValueChange={(value) =>
+                  setNovaSessao({ ...novaSessao, competition_id: value === "none" ? null : value })
+                }
+              >
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                  <SelectValue placeholder="Selecionar concurso" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-700 border-slate-600">
+                  <SelectItem value="none" className="text-white">
+                    Nenhum concurso
+                  </SelectItem>
+                  {concursos.map((concurso) => (
+                    <SelectItem key={concurso.id} value={concurso.id!} className="text-white">
+                      {concurso.title} - {concurso.organizer}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label htmlFor="notes" className="text-slate-300">
                 Observações (opcional)
               </Label>
@@ -223,6 +283,123 @@ export function RegistroEstudos() {
               className="bg-blue-600 hover:bg-blue-700"
             >
               Adicionar Sessão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Session Dialog */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="bg-slate-800 text-white border-slate-700">
+          <DialogHeader>
+            <DialogTitle>Editar Sessão de Estudo</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-subject" className="text-slate-300">
+                Matéria *
+              </Label>
+              <Input
+                id="edit-subject"
+                placeholder="Ex: Matemática"
+                value={sessaoEditando?.subject || ""}
+                onChange={(e) => setSessaoEditando(prev => 
+                  prev ? { ...prev, subject: e.target.value } : null
+                )}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-topic" className="text-slate-300">
+                Tópico (opcional)
+              </Label>
+              <Input
+                id="edit-topic"
+                placeholder="Ex: Álgebra Linear"
+                value={sessaoEditando?.topic || ""}
+                onChange={(e) => setSessaoEditando(prev => 
+                  prev ? { ...prev, topic: e.target.value } : null
+                )}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-duration" className="text-slate-300">
+                Duração Planejada (minutos)
+              </Label>
+              <Input
+                id="edit-duration"
+                type="number"
+                value={sessaoEditando?.duration_minutes || 25}
+                onChange={(e) => setSessaoEditando(prev => 
+                  prev ? { ...prev, duration_minutes: Number.parseInt(e.target.value) || 25 } : null
+                )}
+                className="bg-slate-700 border-slate-600 text-white"
+                min="1"
+                max="480"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-competition" className="text-slate-300">
+                Concurso (opcional)
+              </Label>
+              <Select
+                value={sessaoEditando?.competition_id || "none"}
+                onValueChange={(value) => setSessaoEditando(prev => 
+                  prev ? { ...prev, competition_id: value === "none" ? null : value } : null
+                )}
+              >
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                  <SelectValue placeholder="Selecionar concurso" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-700 border-slate-600">
+                  <SelectItem value="none" className="text-white">
+                    Nenhum concurso
+                  </SelectItem>
+                  {concursos.map((concurso) => (
+                    <SelectItem key={concurso.id} value={concurso.id!} className="text-white">
+                      {concurso.title} - {concurso.organizer}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="edit-notes" className="text-slate-300">
+                Observações (opcional)
+              </Label>
+              <Textarea
+                id="edit-notes"
+                placeholder="Anotações sobre a sessão de estudo..."
+                value={sessaoEditando?.notes || ""}
+                onChange={(e) => setSessaoEditando(prev => 
+                  prev ? { ...prev, notes: e.target.value } : null
+                )}
+                className="bg-slate-700 border-slate-600 text-white"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelEdit}
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpdateSessao}
+              disabled={!sessaoEditando?.subject?.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>

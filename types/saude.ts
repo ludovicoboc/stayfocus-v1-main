@@ -51,5 +51,20 @@ export interface ResumoHumor {
   fatoresComuns: string[]
 }
 
+export interface MedicamentoTomado {
+  id: string
+  user_id: string
+  medicamento_id: string
+  data_tomada: string
+  horario_tomada: string
+  created_at: string
+}
+
+export interface NovoMedicamentoTomado {
+  medicamento_id: string
+  data_tomada: string
+  horario_tomada: string
+}
+
 export type FrequenciaMedicamento = "Diária" | "Semanal" | "Mensal" | "Conforme necessário"
 export type IntervaloHoras = "4 horas" | "6 horas" | "8 horas" | "12 horas" | "24 horas"

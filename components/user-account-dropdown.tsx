@@ -257,7 +257,7 @@ export function UserAccountDropdown({ children }: UserAccountDropdownProps) {
           <ChevronRight className="ml-auto h-4 w-4" />
         </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={() => router.push("/dashboard")} className="p-3">
+        <DropdownMenuItem onClick={() => router.push("/")} className="p-3">
           <BarChart3 className="mr-3 h-4 w-4 text-orange-600" />
           <div className="flex flex-col">
             <span className="text-sm font-medium">Estatísticas</span>

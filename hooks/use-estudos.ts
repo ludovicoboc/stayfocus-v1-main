@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import type { SessaoEstudo } from "@/types/estudos"
+import { validateSessaoEstudo, validateData, sanitizeString, sanitizeNumber } from "@/utils/validations"
 
 export function useEstudos() {
   const { user } = useAuth()
@@ -41,11 +42,23 @@ export function useEstudos() {
     if (!user) return null
 
     try {
+      // Sanitizar dados de entrada
+      const sessaoSanitizada = {
+        ...sessao,
+        topic: sanitizeString(sessao.topic),
+        duration_minutes: sanitizeNumber(sessao.duration_minutes),
+        pomodoro_cycles: sanitizeNumber(sessao.pomodoro_cycles) || 0,
+        notes: sessao.notes ? sanitizeString(sessao.notes) : undefined,
+      }
+
+      // Validar dados antes de enviar
+      validateData(sessaoSanitizada, validateSessaoEstudo)
+
       const { data, error } = await supabase
         .from("study_sessions")
         .insert({
           user_id: user.id,
-          ...sessao,
+          ...sessaoSanitizada,
         })
         .select()
         .single()

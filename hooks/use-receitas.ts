@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
+import { validateReceita, validateItemListaCompras, validateData, sanitizeString, sanitizeArray, sanitizeNumber } from "@/utils/validations"
 
 export interface Receita {
   id: string
@@ -84,38 +85,106 @@ export function useReceitas() {
   const adicionarReceita = async (receita: Omit<Receita, "id" | "user_id" | "created_at" | "updated_at">) => {
     if (!user) return { error: new Error("Usuário não autenticado") }
 
-    const { data, error } = await supabase
-      .from("receitas")
-      .insert({
-        user_id: user.id,
+    try {
+      // Sanitizar dados de entrada
+      const receitaSanitizada = {
         ...receita,
-      })
-      .select()
-      .single()
+        nome: sanitizeString(receita.nome),
+        categoria: sanitizeString(receita.categoria),
+        ingredientes: sanitizeArray(receita.ingredientes),
+        modo_preparo: sanitizeString(receita.modo_preparo),
+        tempo_preparo: sanitizeNumber(receita.tempo_preparo),
+        porcoes: sanitizeNumber(receita.porcoes),
+      }
 
-    if (!error && data) {
-      setReceitas((prev) => [data, ...prev])
+      // Validar dados antes de enviar
+      validateData(receitaSanitizada, validateReceita)
+
+      const { data, error } = await supabase
+        .from("receitas")
+        .insert({
+          user_id: user.id,
+          ...receitaSanitizada,
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        setReceitas((prev) => [data, ...prev])
+      }
+
+      return { data, error }
+    } catch (validationError) {
+      return { error: validationError as Error, data: null }
     }
-
-    return { data, error }
   }
 
   const atualizarReceita = async (id: string, receita: Partial<Receita>) => {
     if (!user) return { error: new Error("Usuário não autenticado") }
 
-    const { data, error } = await supabase
-      .from("receitas")
-      .update(receita)
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .select()
-      .single()
+    try {
+      // Sanitizar dados de entrada
+      const receitaSanitizada: Partial<Receita> = {}
+      
+      if (receita.nome !== undefined) {
+        receitaSanitizada.nome = sanitizeString(receita.nome)
+      }
+      if (receita.categoria !== undefined) {
+        receitaSanitizada.categoria = sanitizeString(receita.categoria)
+      }
+      if (receita.ingredientes !== undefined) {
+        receitaSanitizada.ingredientes = sanitizeArray(receita.ingredientes)
+      }
+      if (receita.modo_preparo !== undefined) {
+        receitaSanitizada.modo_preparo = sanitizeString(receita.modo_preparo)
+      }
+      if (receita.tempo_preparo !== undefined) {
+        const tempo = sanitizeNumber(receita.tempo_preparo)
+        receitaSanitizada.tempo_preparo = tempo === null ? undefined : tempo
+      }
+      if (receita.porcoes !== undefined) {
+        const porcoes = sanitizeNumber(receita.porcoes)
+        receitaSanitizada.porcoes = porcoes === null ? undefined : porcoes
+      }
+      if (receita.dificuldade !== undefined) {
+        receitaSanitizada.dificuldade = receita.dificuldade
+      }
+      if (receita.favorita !== undefined) {
+        receitaSanitizada.favorita = receita.favorita
+      }
 
-    if (!error && data) {
-      setReceitas((prev) => prev.map((r) => (r.id === id ? data : r)))
+      // Se há dados suficientes, validar
+      if (Object.keys(receitaSanitizada).length > 1) { // Mais que apenas um campo
+        // Para updates parciais, validamos apenas se temos dados essenciais
+        if (receitaSanitizada.nome || receitaSanitizada.categoria || receitaSanitizada.ingredientes || receitaSanitizada.modo_preparo) {
+          // Criar um objeto temporário para validação com valores padrão para campos obrigatórios
+          const receitaParaValidacao = {
+            nome: receitaSanitizada.nome || 'temp',
+            categoria: receitaSanitizada.categoria || 'temp',
+            ingredientes: receitaSanitizada.ingredientes || ['temp'],
+            modo_preparo: receitaSanitizada.modo_preparo || 'temp',
+            ...receitaSanitizada
+          }
+          validateData(receitaParaValidacao, validateReceita)
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("receitas")
+        .update(receitaSanitizada)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select()
+        .single()
+
+      if (!error && data) {
+        setReceitas((prev) => prev.map((r) => (r.id === id ? data : r)))
+      }
+
+      return { data, error }
+    } catch (validationError) {
+      return { error: validationError as Error, data: null }
     }
-
-    return { data, error }
   }
 
   const excluirReceita = async (id: string) => {
@@ -137,23 +206,35 @@ export function useReceitas() {
   const adicionarItemListaCompras = async (nome: string, categoria: string, quantidade?: string) => {
     if (!user) return { error: new Error("Usuário não autenticado") }
 
-    const { data, error } = await supabase
-      .from("lista_compras")
-      .insert({
-        user_id: user.id,
-        nome,
-        categoria,
-        quantidade,
-        comprado: false,
-      })
-      .select()
-      .single()
+    try {
+      // Sanitizar dados de entrada
+      const itemSanitizado = {
+        nome: sanitizeString(nome),
+        categoria: sanitizeString(categoria),
+        quantidade: quantidade ? sanitizeString(quantidade) : undefined,
+      }
 
-    if (!error && data) {
-      setListaCompras((prev) => [...prev, data])
+      // Validar dados antes de enviar
+      validateData(itemSanitizado, validateItemListaCompras)
+
+      const { data, error } = await supabase
+        .from("lista_compras")
+        .insert({
+          user_id: user.id,
+          ...itemSanitizado,
+          comprado: false,
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        setListaCompras((prev) => [...prev, data])
+      }
+
+      return { data, error }
+    } catch (validationError) {
+      return { error: validationError as Error, data: null }
     }
-
-    return { data, error }
   }
 
   const toggleItemComprado = async (id: string, comprado: boolean) => {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase"
 import { useAuth } from "./use-auth"
 import type {
   Medicamento,
@@ -10,16 +10,20 @@ import type {
   NovoRegistroHumor,
   ResumoMedicamentos,
   ResumoHumor,
+  MedicamentoTomado,
+  NovoMedicamentoTomado,
 } from "@/types/saude"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { validateMedicamento, validateRegistroHumor, validateData, sanitizeString, sanitizeArray, sanitizeDate } from "@/utils/validations"
 
 export function useSaude() {
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
   const { user } = useAuth()
 
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([])
   const [registrosHumor, setRegistrosHumor] = useState<RegistroHumor[]>([])
+  const [medicamentosTomados, setMedicamentosTomados] = useState<MedicamentoTomado[]>([])
   const [loadingMedicamentos, setLoadingMedicamentos] = useState(true)
   const [loadingRegistrosHumor, setLoadingRegistrosHumor] = useState(true)
   const [resumoMedicamentos, setResumoMedicamentos] = useState<ResumoMedicamentos>({
@@ -31,6 +35,26 @@ export function useSaude() {
     media: 0,
     fatoresComuns: [],
   })
+
+  // Carregar medicamentos tomados
+  const carregarMedicamentosTomados = useCallback(async () => {
+    if (!user) return
+
+    try {
+      const hoje = new Date().toISOString().split('T')[0]
+      const { data, error } = await supabase
+        .from("medicamentos_tomados")
+        .select("*")
+        .eq("data_tomada", hoje)
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+
+      setMedicamentosTomados(data || [])
+    } catch (error) {
+      console.error("Erro ao carregar medicamentos tomados:", error)
+    }
+  }, [supabase, user])
 
   // Carregar medicamentos
   const carregarMedicamentos = useCallback(async () => {
@@ -44,13 +68,14 @@ export function useSaude() {
       if (error) throw error
 
       setMedicamentos(data || [])
+      await carregarMedicamentosTomados()
       calcularResumoMedicamentos(data || [])
     } catch (error) {
       console.error("Erro ao carregar medicamentos:", error)
     } finally {
       setLoadingMedicamentos(false)
     }
-  }, [supabase, user])
+  }, [supabase, user, carregarMedicamentosTomados])
 
   // Carregar registros de humor
   const carregarRegistrosHumor = useCallback(async () => {
@@ -77,11 +102,25 @@ export function useSaude() {
     if (!user) return null
 
     try {
+      // Sanitizar dados de entrada
+      const medicamentoSanitizado = {
+        ...novoMedicamento,
+        nome: sanitizeString(novoMedicamento.nome),
+        dosagem: sanitizeString(novoMedicamento.dosagem),
+        frequencia: sanitizeString(novoMedicamento.frequencia),
+        horarios: sanitizeArray(novoMedicamento.horarios),
+        data_inicio: sanitizeDate(novoMedicamento.data_inicio),
+        observacoes: novoMedicamento.observacoes ? sanitizeString(novoMedicamento.observacoes) : undefined,
+      }
+
+      // Validar dados
+      validateData(medicamentoSanitizado, validateMedicamento)
+
       const { data, error } = await supabase
         .from("medicamentos")
         .insert([
           {
-            ...novoMedicamento,
+            ...medicamentoSanitizado,
             user_id: user.id,
           },
         ])
@@ -102,11 +141,22 @@ export function useSaude() {
     if (!user) return null
 
     try {
+      // Sanitizar dados de entrada
+      const registroSanitizado = {
+        ...novoRegistro,
+        data: sanitizeDate(novoRegistro.data),
+        fatores: novoRegistro.fatores ? sanitizeArray(novoRegistro.fatores) : undefined,
+        notas: novoRegistro.notas ? sanitizeString(novoRegistro.notas) : undefined,
+      }
+
+      // Validar dados
+      validateData(registroSanitizado, validateRegistroHumor)
+
       const { data, error } = await supabase
         .from("registros_humor")
         .insert([
           {
-            ...novoRegistro,
+            ...registroSanitizado,
             user_id: user.id,
           },
         ])
@@ -118,6 +168,58 @@ export function useSaude() {
       return data?.[0] || null
     } catch (error) {
       console.error("Erro ao adicionar registro de humor:", error)
+      return null
+    }
+  }
+
+  // Marcar medicamento como tomado
+  const marcarMedicamentoTomado = async (novoMedicamentoTomado: NovoMedicamentoTomado) => {
+    if (!user) return null
+
+    try {
+      // Sanitizar dados de entrada
+      const medicamentoTomadoSanitizado = {
+        ...novoMedicamentoTomado,
+        data_tomada: sanitizeDate(novoMedicamentoTomado.data_tomada),
+        horario_tomada: sanitizeString(novoMedicamentoTomado.horario_tomada),
+      }
+
+      // Validações básicas
+      if (!medicamentoTomadoSanitizado.medicamento_id) {
+        throw new Error("ID do medicamento é obrigatório")
+      }
+      
+      if (!medicamentoTomadoSanitizado.data_tomada) {
+        throw new Error("Data da tomada é obrigatória")
+      }
+      
+      if (!medicamentoTomadoSanitizado.horario_tomada) {
+        throw new Error("Horário da tomada é obrigatório")
+      }
+
+      // Validar formato do horário
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+      if (!timeRegex.test(medicamentoTomadoSanitizado.horario_tomada)) {
+        throw new Error("Horário deve ter formato HH:MM")
+      }
+
+      const { data, error } = await supabase
+        .from("medicamentos_tomados")
+        .insert([
+          {
+            ...medicamentoTomadoSanitizado,
+            user_id: user.id,
+          },
+        ])
+        .select()
+
+      if (error) throw error
+
+      await carregarMedicamentosTomados()
+      await carregarMedicamentos() // Recarregar para atualizar resumo
+      return data?.[0] || null
+    } catch (error) {
+      console.error("Erro ao marcar medicamento como tomado:", error)
       return null
     }
   }
@@ -155,7 +257,18 @@ export function useSaude() {
   // Calcular resumo de medicamentos
   const calcularResumoMedicamentos = (medicamentos: Medicamento[]) => {
     const total = medicamentos.length
-    const tomadosHoje = 0 // Implementação simplificada
+    
+    // Calcular medicamentos tomados hoje baseado nos registros
+    const hoje = new Date().toISOString().split('T')[0]
+    const medicamentosUnicos = new Set()
+    
+    medicamentosTomados.forEach((tomado) => {
+      if (tomado.data_tomada === hoje) {
+        medicamentosUnicos.add(tomado.medicamento_id)
+      }
+    })
+    
+    const tomadosHoje = medicamentosUnicos.size
 
     // Encontrar a próxima dose
     let proximaDose: string | null = null
@@ -246,16 +359,19 @@ export function useSaude() {
   return {
     medicamentos,
     registrosHumor,
+    medicamentosTomados,
     loadingMedicamentos,
     loadingRegistrosHumor,
     resumoMedicamentos,
     resumoHumor,
     adicionarMedicamento,
     adicionarRegistroHumor,
+    marcarMedicamentoTomado,
     excluirMedicamento,
     excluirRegistroHumor,
     carregarMedicamentos,
     carregarRegistrosHumor,
+    carregarMedicamentosTomados,
     formatarData,
   }
 }

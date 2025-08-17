@@ -26,10 +26,6 @@ const nextConfig = {
       },
     ]
   },
-  // Configurações de servidor para desenvolvimento
-  devIndicators: {
-    buildActivity: false,
-  },
 }
 
 export default nextConfig

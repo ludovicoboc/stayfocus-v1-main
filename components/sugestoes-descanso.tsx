@@ -10,8 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Heart, SkipForward, Lightbulb } from "lucide-react"
+import { Plus, Heart, SkipForward, Lightbulb, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { useLazer } from "@/hooks/use-lazer"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 const CATEGORIAS_SUGESTAO = [
   "Relaxamento",
@@ -28,7 +30,7 @@ const CATEGORIAS_SUGESTAO = [
 const DIFICULDADES = ["Fácil", "Médio", "Difícil"]
 
 export function SugestoesDescanso() {
-  const { sugestoes, favoritas, toggleFavorita, adicionarSugestao, loading } = useLazer()
+  const { sugestoes, favoritas, toggleFavorita, adicionarSugestao, loading, error, operationLoading, successMessage, clearMessages } = useLazer()
   const [sugestaoAtual, setSugestaoAtual] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
   const [formData, setFormData] = useState({
@@ -41,6 +43,7 @@ export function SugestoesDescanso() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    clearMessages()
 
     try {
       await adicionarSugestao({
@@ -54,7 +57,16 @@ export function SugestoesDescanso() {
       setFormData({ titulo: "", descricao: "", categoria: "", dificuldade: "Fácil", duracao_estimada: "" })
       setIsOpen(false)
     } catch (error) {
-      console.error("Erro ao adicionar sugestão:", error)
+      // Erro já tratado no hook
+    }
+  }
+
+  const handleToggleFavorita = async (sugestaoId: string) => {
+    clearMessages()
+    try {
+      await toggleFavorita(sugestaoId)
+    } catch (error) {
+      // Erro já tratado no hook
     }
   }
 
@@ -177,8 +189,15 @@ export function SugestoesDescanso() {
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Adicionar Sugestão
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={operationLoading}>
+                  {operationLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Adicionando...
+                    </>
+                  ) : (
+                    "Adicionar Sugestão"
+                  )}
                 </Button>
               </div>
             </form>
@@ -186,6 +205,20 @@ export function SugestoesDescanso() {
         </Dialog>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Mensagens de Feedback */}
+        {error && (
+          <Alert className="bg-red-900/20 border-red-700/50">
+            <AlertCircle className="h-4 w-4 text-red-400" />
+            <AlertDescription className="text-red-200">{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert className="bg-green-900/20 border-green-700/50">
+            <CheckCircle2 className="h-4 w-4 text-green-400" />
+            <AlertDescription className="text-green-200">{successMessage}</AlertDescription>
+          </Alert>
+        )}
         {/* Sugestão Atual */}
         {sugestoes.length > 0 && (
           <div>
@@ -207,18 +240,23 @@ export function SugestoesDescanso() {
 
                 <div className="flex justify-center space-x-4">
                   <Button
-                    onClick={() => toggleFavorita(sugestoes[sugestaoAtual].id)}
+                    onClick={() => handleToggleFavorita(sugestoes[sugestaoAtual].id)}
                     variant="outline"
                     className={`border-slate-600 ${
                       isFavorita(sugestoes[sugestaoAtual].id)
                         ? "bg-red-600 text-white border-red-600"
                         : "text-slate-300"
                     }`}
+                    disabled={operationLoading}
                   >
-                    <Heart
-                      className={`w-4 h-4 mr-2 ${isFavorita(sugestoes[sugestaoAtual].id) ? "fill-current" : ""}`}
-                    />
-                    Favoritar
+                    {operationLoading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Heart
+                        className={`w-4 h-4 mr-2 ${isFavorita(sugestoes[sugestaoAtual].id) ? "fill-current" : ""}`}
+                      />
+                    )}
+                    {isFavorita(sugestoes[sugestaoAtual].id) ? "Remover" : "Favoritar"}
                   </Button>
 
                   <Button onClick={proximaSugestao} className="bg-blue-600 hover:bg-blue-700">
@@ -257,14 +295,41 @@ export function SugestoesDescanso() {
                           )}
                         </div>
                       </div>
-                      <Button
-                        onClick={() => toggleFavorita(sugestao?.id || "")}
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-400 hover:text-red-300"
-                      >
-                        <Heart className="w-4 h-4 fill-current" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300"
+                            disabled={operationLoading}
+                          >
+                            {operationLoading ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Heart className="w-4 h-4 fill-current" />
+                            )}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-slate-800 border-slate-700">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-white">Remover dos Favoritos</AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-300">
+                              Tem certeza que deseja remover "{sugestao?.titulo}" dos seus favoritos?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600">
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleToggleFavorita(sugestao?.id || "")}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Remover
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </CardContent>
                 </Card>

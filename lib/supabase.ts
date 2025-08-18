@@ -14,11 +14,101 @@ if (!supabaseAnonKey) {
 
 // Função para criar cliente Supabase (para componentes)
 export function createClient() {
-  return createBrowserClient(supabaseUrl!, supabaseAnonKey!);
+  return createBrowserClient(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      // Configurações para melhor gestão de sessões
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: "pkce",
+      storage: typeof window !== "undefined" ? window.localStorage : undefined,
+    },
+    global: {
+      headers: {
+        "X-Client-Info": "stayfocus-alimentacao@1.0.0",
+      },
+    },
+    // Configurações para melhor compatibilidade de cookies são gerenciadas internamente
+  });
 }
 
 // Cliente Supabase global para uso direto
 export const supabase = createClient();
+
+// Helper function to ensure authenticated requests
+export async function createAuthenticatedClient() {
+  const client = createClient();
+
+  try {
+    // Verificar se há uma sessão válida
+    const {
+      data: { session },
+      error,
+    } = await client.auth.getSession();
+
+    if (error) {
+      console.error("❌ Erro ao obter sessão para cliente autenticado:", error);
+      throw new Error(`Erro de autenticação: ${error.message}`);
+    }
+
+    if (!session) {
+      console.error("❌ Nenhuma sessão ativa encontrada");
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se o token ainda é válido
+    const now = Math.floor(Date.now() / 1000);
+    if (session.expires_at && session.expires_at <= now) {
+      console.log("🔄 Token expirado, tentando renovar...");
+      const { data: refreshData, error: refreshError } =
+        await client.auth.refreshSession();
+
+      if (refreshError) {
+        console.error("❌ Erro ao renovar sessão:", refreshError);
+        throw new Error(`Erro ao renovar sessão: ${refreshError.message}`);
+      }
+
+      if (!refreshData.session) {
+        throw new Error("Falha ao renovar sessão");
+      }
+    }
+
+    console.log("✅ Cliente autenticado configurado com sucesso");
+    return client;
+  } catch (error) {
+    console.error("❌ Erro ao criar cliente autenticado:", error);
+    throw error;
+  }
+}
+
+// Helper function for authenticated database operations
+export async function withAuthenticatedSupabase<T>(
+  operation: (client: ReturnType<typeof createClient>) => Promise<T>,
+): Promise<T> {
+  const client = await createAuthenticatedClient();
+  return await operation(client);
+}
+
+// Helper to get current user with validation
+export async function getCurrentAuthenticatedUser() {
+  const client = await createAuthenticatedClient();
+
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser();
+
+  if (error) {
+    console.error("❌ Erro ao obter usuário atual:", error);
+    throw new Error(`Erro ao obter usuário: ${error.message}`);
+  }
+
+  if (!user) {
+    throw new Error("Usuário não encontrado");
+  }
+
+  return user;
+}
 
 export type Database = {
   public: {

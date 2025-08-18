@@ -189,10 +189,64 @@ CREATE TRIGGER validate_sleep_record_data
     FOR EACH ROW EXECUTE FUNCTION validate_sleep_times();
 
 -- ====================
+-- FUNÇÃO PARA CRIAR CONFIGURAÇÕES PADRÃO
+-- ====================
+
+-- Função para criar configurações padrão de lembretes de sono
+CREATE OR REPLACE FUNCTION create_default_sleep_reminders(user_uuid uuid)
+RETURNS void AS $$
+BEGIN
+    -- Criar configuração padrão de lembretes
+    INSERT INTO sleep_reminders (
+        user_id, 
+        bedtime_reminder_enabled, 
+        bedtime_reminder_time, 
+        wake_reminder_enabled, 
+        wake_reminder_time,
+        weekdays,
+        message,
+        active
+    ) VALUES (
+        user_uuid, 
+        false,  -- lembretes desabilitados por padrão
+        '22:00', 
+        false, 
+        '07:00',
+        ARRAY['segunda', 'terca', 'quarta', 'quinta', 'sexta'], -- dias úteis por padrão
+        'Hora de se preparar para dormir! 😴',
+        true
+    )
+    ON CONFLICT (user_id) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Conceder permissão para usuários autenticados
+GRANT EXECUTE ON FUNCTION create_default_sleep_reminders TO authenticated;
+
+-- ====================
+-- TRIGGER PARA CRIAR CONFIGURAÇÕES AUTOMÁTICAMENTE
+-- ====================
+
+-- Função de trigger para criar configurações padrão automaticamente
+CREATE OR REPLACE FUNCTION handle_new_user_sleep_setup()
+RETURNS trigger AS $$
+BEGIN
+    -- Criar configurações padrão de sono para o novo usuário
+    PERFORM create_default_sleep_reminders(NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger para quando um novo usuário é criado
+CREATE TRIGGER on_auth_user_created_sleep_setup
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION handle_new_user_sleep_setup();
+
+-- ====================
 -- DADOS INICIAIS
 -- ====================
 
--- Não inserir dados iniciais por se tratar de dados pessoais
--- Os dados serão criados conforme os usuários utilizem o sistema
+-- Configurações padrão são criadas automaticamente via trigger
+-- Registros de sono são pessoais e criados pelo usuário
 
 COMMIT;

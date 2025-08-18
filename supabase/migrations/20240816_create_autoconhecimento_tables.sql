@@ -78,7 +78,6 @@ CREATE TRIGGER update_self_knowledge_notes_updated_at
 
 -- Grant necessary permissions to authenticated users
 GRANT SELECT, INSERT, UPDATE, DELETE ON self_knowledge_notes TO authenticated;
-GRANT USAGE ON SEQUENCE self_knowledge_notes_id_seq TO authenticated;
 
 -- Create function for full-text search (optional enhancement)
 CREATE OR REPLACE FUNCTION search_self_knowledge_notes(

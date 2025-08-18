@@ -87,18 +87,12 @@ CREATE POLICY "Users can update their own atividades_lazer" ON atividades_lazer
 CREATE POLICY "Users can delete their own atividades_lazer" ON atividades_lazer
     FOR DELETE USING (auth.uid() = user_id);
 
--- Políticas para sugestoes_descanso (visível para todos os usuários autenticados)
+-- Políticas para sugestoes_descanso (apenas leitura para usuários autenticados)
 CREATE POLICY "Authenticated users can view sugestoes_descanso" ON sugestoes_descanso
     FOR SELECT USING (auth.role() = 'authenticated');
 
-CREATE POLICY "Authenticated users can insert sugestoes_descanso" ON sugestoes_descanso
-    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-CREATE POLICY "Authenticated users can update sugestoes_descanso" ON sugestoes_descanso
-    FOR UPDATE USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Authenticated users can delete sugestoes_descanso" ON sugestoes_descanso
-    FOR DELETE USING (auth.role() = 'authenticated');
+-- Nota: Apenas administradores podem inserir, atualizar ou deletar sugestões
+-- Sugestões são dados pré-populados na migração
 
 -- Políticas para sugestoes_favoritas
 CREATE POLICY "Users can view their own sugestoes_favoritas" ON sugestoes_favoritas
@@ -189,6 +183,15 @@ INSERT INTO sugestoes_descanso (titulo, descricao, categoria, dificuldade, durac
 ON CONFLICT DO NOTHING;
 
 -- =====================================================
+-- CONSTRAINTS ADICIONAIS
+-- =====================================================
+
+-- Garantir que apenas uma sessão pode estar ativa por usuário
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessoes_lazer_user_ativa 
+    ON sessoes_lazer(user_id) 
+    WHERE status = 'ativo';
+
+-- =====================================================
 -- COMENTÁRIOS FINAIS
 -- =====================================================
 
@@ -197,10 +200,28 @@ COMMENT ON TABLE sugestoes_descanso IS 'Sugestões de atividades de descanso dis
 COMMENT ON TABLE sugestoes_favoritas IS 'Relacionamento entre usuários e suas sugestões favoritas';
 COMMENT ON TABLE sessoes_lazer IS 'Sessões de temporizador de lazer dos usuários';
 
+-- Comentários detalhados das colunas
+COMMENT ON COLUMN atividades_lazer.nome IS 'Nome da atividade de lazer realizada';
+COMMENT ON COLUMN atividades_lazer.categoria IS 'Categoria da atividade (opcional)';
+COMMENT ON COLUMN atividades_lazer.duracao_minutos IS 'Duração da atividade em minutos';
+COMMENT ON COLUMN atividades_lazer.data_realizacao IS 'Data e hora em que a atividade foi realizada';
 COMMENT ON COLUMN atividades_lazer.avaliacao IS 'Avaliação da atividade de 1 a 10';
 COMMENT ON COLUMN atividades_lazer.observacoes IS 'Campo adicional para observações sobre a atividade';
+
+COMMENT ON COLUMN sugestoes_descanso.titulo IS 'Título da sugestão de descanso';
+COMMENT ON COLUMN sugestoes_descanso.descricao IS 'Descrição detalhada da atividade';
+COMMENT ON COLUMN sugestoes_descanso.categoria IS 'Categoria da sugestão (ex: Respiração, Mindfulness)';
 COMMENT ON COLUMN sugestoes_descanso.dificuldade IS 'Nível de dificuldade: Fácil, Médio ou Difícil';
+COMMENT ON COLUMN sugestoes_descanso.duracao_estimada IS 'Duração estimada em minutos';
+
+COMMENT ON COLUMN sugestoes_favoritas.user_id IS 'ID do usuário que favoritou';
+COMMENT ON COLUMN sugestoes_favoritas.sugestao_id IS 'ID da sugestão favoritada';
+
+COMMENT ON COLUMN sessoes_lazer.duracao_minutos IS 'Duração planejada da sessão em minutos';
 COMMENT ON COLUMN sessoes_lazer.tempo_usado_minutos IS 'Tempo efetivamente usado da sessão em minutos';
 COMMENT ON COLUMN sessoes_lazer.status IS 'Status da sessão: ativo, pausado ou concluido';
+COMMENT ON COLUMN sessoes_lazer.atividade_id IS 'ID da atividade associada (opcional)';
+COMMENT ON COLUMN sessoes_lazer.data_inicio IS 'Data e hora de início da sessão';
+COMMENT ON COLUMN sessoes_lazer.data_fim IS 'Data e hora de fim da sessão (opcional)';
 
 COMMIT;

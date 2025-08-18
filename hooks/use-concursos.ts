@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase";
+import { validateAuthState, withAuth, requireAuth } from "@/lib/auth-utils";
 import type {
   Concurso,
   Disciplina,
+  Topico,
   Questao,
   Simulado,
 } from "@/types/concursos";
@@ -16,6 +18,14 @@ import {
   sanitizeString,
   sanitizeDate,
 } from "@/utils/validations";
+import { handleSupabaseCompetitionError } from "@/lib/error-handler";
+
+// Cache simples para concursos
+const competitionsCache = new Map<
+  string,
+  { data: Concurso[]; timestamp: number }
+>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
 export function useConcursos() {
   const { user } = useAuth();
@@ -29,40 +39,303 @@ export function useConcursos() {
     }
   }, [user]);
 
-  const fetchConcursos = async () => {
-    if (!user) return;
+  // Buscar concursos com consulta otimizada
+  const fetchConcursos = useCallback(async () => {
+    const result = await withAuth(async (authUser) => {
+      const cacheKey = `competitions_${authUser.id}`;
 
-    try {
+      // Verificar cache primeiro
+      if (competitionsCache.has(cacheKey)) {
+        const cached = competitionsCache.get(cacheKey)!;
+        if (Date.now() - cached.timestamp < CACHE_DURATION) {
+          setConcursos(cached.data);
+          setLoading(false);
+          return cached.data;
+        }
+      }
+
       setLoading(true);
+
       const { data, error } = await supabase
         .from("competitions")
         .select(
-          "id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at",
+          `
+          *,
+          competition_subjects!inner (
+            *,
+            competition_topics (*)
+          ),
+          competition_questions (*)
+        `,
         )
-        .eq("user_id", user.id)
+        .eq("user_id", authUser.id)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setConcursos(data || []);
-    } catch (error) {
-      console.error("Error fetching competitions:", error);
-    } finally {
-      setLoading(false);
+      if (error) {
+        throw new Error(handleSupabaseError(error));
+      }
+
+      const competitions = data || [];
+
+      // Atualizar cache
+      competitionsCache.set(cacheKey, {
+        data: competitions,
+        timestamp: Date.now(),
+      });
+
+      setConcursos(competitions);
+      return competitions;
+    });
+
+    if (result.error) {
+      console.error("Erro ao buscar concursos:", result.error);
+    }
+
+    setLoading(false);
+  }, [user]);
+
+  // Criar concurso otimizado
+  const createCompetition = useCallback(
+    async (competitionData: Partial<Concurso>) => {
+      return await withAuth(async (authUser) => {
+        const { data, error } = await supabase
+          .from("competitions")
+          .insert([
+            {
+              ...competitionData,
+              user_id: authUser.id, // Será inserido automaticamente pelo RLS
+            },
+          ])
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(handleSupabaseError(error));
+        }
+
+        // Limpar cache
+        const cacheKey = `competitions_${authUser.id}`;
+        competitionsCache.delete(cacheKey);
+
+        // Atualizar estado local
+        setConcursos((prev) => [data, ...prev]);
+
+        return data;
+      });
+    },
+    [],
+  );
+
+  // Atualizar concurso
+  const updateCompetition = useCallback(
+    async (competitionId: string, updates: Partial<Concurso>) => {
+      return await withAuth(async (authUser) => {
+        // Validar propriedade primeiro
+        await validateCompetitionAccess(competitionId);
+
+        const { data, error } = await supabase
+          .from("competitions")
+          .update(updates)
+          .eq("id", competitionId)
+          .eq("user_id", authUser.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(handleSupabaseError(error));
+        }
+
+        // Limpar cache
+        const cacheKey = `competitions_${authUser.id}`;
+        competitionsCache.delete(cacheKey);
+
+        // Atualizar estado local
+        setConcursos((prev) =>
+          prev.map((comp) =>
+            comp.id === competitionId ? { ...comp, ...data } : comp,
+          ),
+        );
+
+        return data;
+      });
+    },
+    [],
+  );
+
+  // Deletar concurso
+  const deleteCompetition = useCallback(async (competitionId: string) => {
+    return await withAuth(async (authUser) => {
+      // Validar propriedade primeiro
+      await validateCompetitionAccess(competitionId);
+
+      const { error } = await supabase
+        .from("competitions")
+        .delete()
+        .eq("id", competitionId)
+        .eq("user_id", authUser.id);
+
+      if (error) {
+        throw new Error(handleSupabaseError(error));
+      }
+
+      // Limpar cache
+      const cacheKey = `competitions_${authUser.id}`;
+      competitionsCache.delete(cacheKey);
+
+      // Atualizar estado local
+      setConcursos((prev) => prev.filter((comp) => comp.id !== competitionId));
+
+      return true;
+    });
+  }, []);
+
+  // Adicionar matéria
+  const addSubject = useCallback(
+    async (competitionId: string, subjectData: Partial<Disciplina>) => {
+      return await withAuth(async (authUser) => {
+        // Validar propriedade do concurso
+        await validateCompetitionAccess(competitionId);
+
+        const { data, error } = await supabase
+          .from("competition_subjects")
+          .insert([
+            {
+              competition_id: competitionId,
+              ...subjectData,
+            },
+          ])
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(handleSupabaseError(error));
+        }
+
+        // Limpar cache
+        const cacheKey = `competitions_${authUser.id}`;
+        competitionsCache.delete(cacheKey);
+
+        return data;
+      });
+    },
+    [],
+  );
+
+  // Atualizar matéria
+  const updateSubject = useCallback(
+    async (subjectId: string, updates: Partial<Disciplina>) => {
+      return await withAuth(async (authUser) => {
+        const { data, error } = await supabase
+          .from("competition_subjects")
+          .update(updates)
+          .eq("id", subjectId)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(handleSupabaseError(error));
+        }
+
+        // Limpar cache
+        const cacheKey = `competitions_${authUser.id}`;
+        competitionsCache.delete(cacheKey);
+
+        return data;
+      });
+    },
+    [],
+  );
+
+  // Deletar matéria
+  const deleteSubject = useCallback(async (subjectId: string) => {
+    return await withAuth(async (authUser) => {
+      const { error } = await supabase
+        .from("competition_subjects")
+        .delete()
+        .eq("id", subjectId);
+
+      if (error) {
+        throw new Error(handleSupabaseError(error));
+      }
+
+      // Limpar cache
+      const cacheKey = `competitions_${authUser.id}`;
+      competitionsCache.delete(cacheKey);
+
+      return true;
+    });
+  }, []);
+
+  // Adicionar tópico
+  const addTopic = useCallback(
+    async (subjectId: string, topicData: Partial<Topico>) => {
+      return await withAuth(async (authUser) => {
+        const { data, error } = await supabase
+          .from("competition_topics")
+          .insert([
+            {
+              subject_id: subjectId,
+              ...topicData,
+            },
+          ])
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(handleSupabaseError(error));
+        }
+
+        // Limpar cache
+        const cacheKey = `competitions_${authUser.id}`;
+        competitionsCache.delete(cacheKey);
+
+        return data;
+      });
+    },
+    [],
+  );
+
+  // Validar acesso ao concurso
+  const validateCompetitionAccess = async (competitionId: string) => {
+    const { data, error } = await supabase.rpc(
+      "verify_user_competition_access",
+      {
+        comp_id: competitionId,
+      },
+    );
+
+    if (
+      error ||
+      !data?.find((d: any) => d.test_type === "ownership")?.can_access
+    ) {
+      throw new Error("Acesso negado ao concurso");
     }
   };
 
+  // Tratamento de erros específico do Supabase
+  const handleSupabaseError = (error: any): string => {
+    if (error?.code === "PGRST301") {
+      return "Você não tem permissão para acessar este concurso";
+    }
+    if (error?.code === "23505") {
+      return "Este concurso já existe";
+    }
+    if (error?.code === "PGRST116") {
+      return "Concurso não encontrado";
+    }
+    return error?.message || "Erro desconhecido";
+  };
+
   const createTestData = async (concursoId: string) => {
-    if (!user) return null;
+    const result = await withAuth(async (authUser) => {
+      console.log("🌱 Criando dados de teste para concurso:", concursoId);
 
-    console.log("🌱 Criando dados de teste para concurso:", concursoId);
-
-    try {
       // Criar concurso
       const { data: concursoData, error: concursoError } = await supabase
         .from("competitions")
         .upsert({
           id: concursoId,
-          user_id: user.id,
+          user_id: authUser.id,
           title: "Concurso Público Federal - Analista de Sistemas",
           organizer: "Ministério da Educação",
           registration_date: "2024-03-15",
@@ -74,8 +347,7 @@ export function useConcursos() {
         .single();
 
       if (concursoError) {
-        console.error("❌ Erro ao criar concurso de teste:", concursoError);
-        return null;
+        throw new Error(handleSupabaseCompetitionError(concursoError));
       }
 
       // Criar disciplinas
@@ -100,7 +372,12 @@ export function useConcursos() {
         },
       ];
 
-      await supabase.from("competition_subjects").upsert(disciplinas);
+      const { error: disciplinasError } = await supabase
+        .from("competition_subjects")
+        .upsert(disciplinas);
+      if (disciplinasError) {
+        throw new Error(handleSupabaseCompetitionError(disciplinasError));
+      }
 
       // Criar tópicos
       const topicos = [
@@ -167,10 +444,14 @@ export function useConcursos() {
 
       console.log("✅ Dados de teste criados com sucesso!");
       return concursoData;
-    } catch (error) {
-      console.error("❌ Erro ao criar dados de teste:", error);
+    });
+
+    if (result.error) {
+      console.error("❌ Erro ao criar dados de teste:", result.error);
       return null;
     }
+
+    return result.data;
   };
 
   const fetchConcursoCompleto = async (id: string) => {
@@ -409,71 +690,57 @@ export function useConcursos() {
     }
   };
 
-  const removerConcurso = async (id: string) => {
-    if (!user) return false;
+  // Atualizar progresso da disciplina (versão otimizada)
+  const atualizarProgressoDisciplina = useCallback(
+    async (disciplinaId: string, progresso: number) => {
+      return await withAuth(async (authUser) => {
+        const { error } = await supabase
+          .from("competition_subjects")
+          .update({
+            progress: progresso,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", disciplinaId);
 
-    try {
-      const { error } = await supabase
-        .from("competitions")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", user.id);
+        if (error) {
+          throw new Error(handleSupabaseError(error));
+        }
 
-      if (error) throw error;
+        // Limpar cache
+        const cacheKey = `competitions_${authUser.id}`;
+        competitionsCache.delete(cacheKey);
 
-      setConcursos(concursos.filter((c) => c.id !== id));
-      return true;
-    } catch (error) {
-      console.error("Error removing competition:", error);
-      return false;
-    }
-  };
+        return true;
+      });
+    },
+    [],
+  );
 
-  const atualizarProgressoDisciplina = async (
-    disciplinaId: string,
-    progresso: number,
-  ) => {
-    if (!user) return false;
+  // Atualizar tópico completado (versão otimizada)
+  const atualizarTopicoCompletado = useCallback(
+    async (topicoId: string, completado: boolean) => {
+      return await withAuth(async (authUser) => {
+        const { error } = await supabase
+          .from("competition_topics")
+          .update({
+            completed: completado,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", topicoId);
 
-    try {
-      const { error } = await supabase
-        .from("competition_subjects")
-        .update({
-          progress: progresso,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", disciplinaId);
+        if (error) {
+          throw new Error(handleSupabaseError(error));
+        }
 
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error("Error updating subject progress:", error);
-      return false;
-    }
-  };
+        // Limpar cache
+        const cacheKey = `competitions_${authUser.id}`;
+        competitionsCache.delete(cacheKey);
 
-  const atualizarTopicoCompletado = async (
-    topicoId: string,
-    completado: boolean,
-  ) => {
-    if (!user) return false;
-
-    try {
-      const { error } = await supabase
-        .from("competition_topics")
-        .update({
-          completed: completado,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", topicoId);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error("Error updating topic completion:", error);
-      return false;
-    }
-  };
+        return true;
+      });
+    },
+    [],
+  );
 
   // Questões
   const adicionarQuestao = async (questao: Questao) => {
@@ -680,20 +947,51 @@ export function useConcursos() {
   };
 
   return {
+    // Estado
     concursos,
     loading,
+
+    // Funções de busca
     fetchConcursos,
     fetchConcursoCompleto,
-    adicionarConcurso,
-    atualizarConcurso,
-    removerConcurso,
+
+    // CRUD de Concursos (otimizado)
+    createCompetition,
+    updateCompetition,
+    deleteCompetition,
+
+    // CRUD de Disciplinas (otimizado)
+    addSubject,
+    updateSubject,
+    deleteSubject,
+
+    // CRUD de Tópicos (otimizado)
+    addTopic,
+
+    // Funções de progresso (otimizadas)
     atualizarProgressoDisciplina,
     atualizarTopicoCompletado,
+
+    // Questões
     adicionarQuestao,
     buscarQuestoesConcurso,
+
+    // Simulados
     adicionarSimulado,
     buscarSimuladosConcurso,
     marcarSimuladoFavorito,
+
+    // Utilitários
     calcularProgressoConcurso,
+    validateCompetitionAccess,
+    handleSupabaseError,
+
+    // Dados de teste
+    createTestData,
+
+    // Funções legadas (manter compatibilidade)
+    adicionarConcurso,
+    atualizarConcurso,
+    removerConcurso: deleteCompetition,
   };
 }

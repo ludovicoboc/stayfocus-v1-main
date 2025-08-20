@@ -592,7 +592,7 @@ if (
 ) {
   try {
     // Só validar se estivermos em ambiente Node.js (servidor)
-    if (process.env.NODE_ENV) {
+    if (process.env.NODE_ENV && envValidator) {
       const result = envValidator.validate();
 
       if (!result.isValid && process.env.NODE_ENV === "production") {

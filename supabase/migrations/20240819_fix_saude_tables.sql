@@ -174,6 +174,26 @@ COMMENT ON COLUMN public.medicamentos_tomados.horario_tomada IS 'Horário em que
 COMMENT ON COLUMN public.medicamentos_tomados.observacoes IS 'Observações sobre a tomada do medicamento';
 
 -- ====================================================================
+-- PROBLEM CRITICAL: INCOMPATIBILIDADE DETECTADA
+-- ====================================================================
+
+-- PROBLEMA: Interface MedicamentoTomado espera campo "observacoes" mas tabela não define
+-- SOLUÇÃO: Verificar e adicionar campo "observacoes" se necessário
+
+DO $$
+BEGIN
+    -- Adicionar campo observacoes à tabela medicamentos_tomados se não existir
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'medicamentos_tomados' 
+        AND column_name = 'observacoes'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE public.medicamentos_tomados ADD COLUMN observacoes text;
+    END IF;
+END $$;
+
+-- ====================================================================
 -- POLÍTICAS RLS (ROW LEVEL SECURITY)
 -- ====================================================================
 
@@ -332,5 +352,23 @@ EXCEPTION
         -- Ignorar erro se constraint já existir
         NULL;
 END $$;
+
+-- ====================================================================
+-- FUNÇÃO PARA CRIAR DADOS PADRÃO DE SAÚDE
+-- ====================================================================
+
+-- Função para criar dados padrão de saúde quando um usuário se registra
+CREATE OR REPLACE FUNCTION create_default_health_data(user_uuid uuid)
+RETURNS void AS $$
+BEGIN
+    -- Não há dados padrão específicos de saúde para criar
+    -- Medicamentos e registros de humor são criados pelo usuário conforme necessário
+    -- Esta função está disponível para futuras implementações se necessário
+    NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Conceder permissão para usuários autenticados
+GRANT EXECUTE ON FUNCTION create_default_health_data TO authenticated;
 
 COMMIT;

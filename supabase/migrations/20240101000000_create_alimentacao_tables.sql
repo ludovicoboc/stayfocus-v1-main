@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS meal_plans (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   time varchar(5) NOT NULL CHECK (time ~ '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'),
   description varchar(200) NOT NULL CHECK (length(trim(description)) >= 2),
+  date date NOT NULL DEFAULT CURRENT_DATE,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -56,7 +57,9 @@ CREATE TABLE IF NOT EXISTS meal_records (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   time varchar(5) NOT NULL CHECK (time ~ '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'),
   description varchar(200) NOT NULL CHECK (length(trim(description)) >= 2),
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  date date NOT NULL DEFAULT CURRENT_DATE,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 -- Tabela: hydration_records (registro de hidratação)
@@ -167,10 +170,13 @@ CREATE INDEX IF NOT EXISTS idx_lista_compras_user_categoria ON lista_compras(use
 CREATE INDEX IF NOT EXISTS idx_meal_plans_user_id ON meal_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_time ON meal_plans(time);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_user_time ON meal_plans(user_id, time);
+CREATE INDEX IF NOT EXISTS idx_meal_plans_user_date ON meal_plans(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_meal_plans_date ON meal_plans(date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_meal_records_user_id ON meal_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_records_created_at ON meal_records(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_meal_records_user_date ON meal_records(user_id, date(created_at));
+CREATE INDEX IF NOT EXISTS idx_meal_records_user_date ON meal_records(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_meal_records_date ON meal_records(date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_hydration_records_user_id ON hydration_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_hydration_records_date ON hydration_records(date DESC);
@@ -200,6 +206,11 @@ CREATE TRIGGER trigger_meal_plans_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER trigger_meal_records_updated_at
+  BEFORE UPDATE ON meal_records
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER trigger_hydration_records_updated_at
   BEFORE UPDATE ON hydration_records
   FOR EACH ROW
@@ -226,7 +237,9 @@ COMMENT ON COLUMN lista_compras.receita_id IS 'Referência opcional à receita q
 COMMENT ON COLUMN lista_compras.quantidade IS 'Quantidade do item (ex: 2kg, 1 pacote, etc.)';
 
 COMMENT ON COLUMN meal_plans.time IS 'Horário planejado para a refeição no formato HH:MM';
+COMMENT ON COLUMN meal_plans.date IS 'Data do planejamento da refeição (YYYY-MM-DD)';
 COMMENT ON COLUMN meal_records.time IS 'Horário em que a refeição foi consumida no formato HH:MM';
+COMMENT ON COLUMN meal_records.date IS 'Data do registro da refeição (YYYY-MM-DD)';
 
 COMMENT ON COLUMN hydration_records.date IS 'Data do registro de hidratação';
 COMMENT ON COLUMN hydration_records.glasses_count IS 'Número de copos de água consumidos no dia';

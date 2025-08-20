@@ -170,23 +170,63 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_user_profiles_updated_at
     BEFORE UPDATE ON user_profiles
     FOR EACH ROW
-    EXECUTE PROCEDURE update_updated_at_column();
+    EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_user_preferences_updated_at
     BEFORE UPDATE ON user_preferences
     FOR EACH ROW
-    EXECUTE PROCEDURE update_updated_at_column();
+    EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_user_goals_updated_at
     BEFORE UPDATE ON user_goals
     FOR EACH ROW
-    EXECUTE PROCEDURE update_updated_at_column();
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
--- SAMPLE DATA (OPTIONAL - for development/testing)
+-- FUNÇÃO PARA CRIAR DADOS PADRÃO DO USUÁRIO
 -- =====================================================
 
--- Note: In production, these tables will be populated by user interactions
--- No sample data inserted as this contains user-specific information
+-- Função para criar dados padrão quando um usuário se registra
+CREATE OR REPLACE FUNCTION create_default_user_data(user_uuid uuid)
+RETURNS void AS $$
+BEGIN
+    -- Criar perfil padrão
+    INSERT INTO user_profiles (user_id, display_name)
+    VALUES (user_uuid, NULL)
+    ON CONFLICT (user_id) DO NOTHING;
+    
+    -- Criar preferências padrão
+    INSERT INTO user_preferences (user_id, high_contrast, large_text, reduced_stimuli)
+    VALUES (user_uuid, false, false, false)
+    ON CONFLICT (user_id) DO NOTHING;
+    
+    -- Criar metas padrão
+    INSERT INTO user_goals (user_id, sleep_hours, daily_tasks, water_glasses, break_frequency)
+    VALUES (user_uuid, 8, 5, 8, 2)
+    ON CONFLICT (user_id) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Conceder permissão para usuários autenticados
+GRANT EXECUTE ON FUNCTION create_default_user_data TO authenticated;
+
+-- =====================================================
+-- TRIGGER PARA CRIAR DADOS AUTOMÁTICAMENTE
+-- =====================================================
+
+-- Função de trigger para criar dados padrão automaticamente
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+    -- Criar dados padrão para o novo usuário
+    PERFORM create_default_user_data(NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger para quando um novo usuário é criado
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 COMMIT;

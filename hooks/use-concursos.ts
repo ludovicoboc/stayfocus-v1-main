@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { createClient } from "@/lib/supabase";
+import {
+  createClient,
+  withAuthenticatedSupabase,
+  getCurrentAuthenticatedUser,
+} from "@/lib/supabase";
 import { validateAuthState, withAuth, requireAuth } from "@/lib/auth-utils";
 import type {
   Concurso,
@@ -454,86 +458,178 @@ export function useConcursos() {
     return result.data;
   };
 
-  const fetchConcursoCompleto = async (id: string) => {
-    if (!user) return null;
+  const fetchConcursoCompleto = async (
+    id: string,
+    retryCount = 0,
+  ): Promise<Concurso | null> => {
+    const MAX_RETRIES = 2;
 
     try {
-      console.log("🔍 Buscando concurso completo, ID:", id);
+      console.log("🔍 Iniciando busca de concurso completo, ID:", id);
+      console.log("🔄 Tentativa:", retryCount + 1);
 
-      // Fetch competition
-      const { data: concursoData, error: concursoError } = await supabase
-        .from("competitions")
-        .select(
-          "id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at",
-        )
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .single();
+      // Usar cliente autenticado
+      return await withAuthenticatedSupabase(async (authClient) => {
+        // Verificar usuário autenticado
+        const authUser = await getCurrentAuthenticatedUser();
+        console.log("👤 Usuario autenticado:", authUser.id);
 
-      if (concursoError) {
-        console.error("❌ Erro ao buscar concurso:", concursoError);
-        if (concursoError.code === "PGRST116") {
-          console.warn("⚠️ Concurso não encontrado ou não pertence ao usuário");
+        // Verificar acesso ao banco de dados
+        const { data: healthCheck } = await authClient
+          .from("competitions")
+          .select("count", { count: "exact", head: true })
+          .eq("user_id", authUser.id)
+          .limit(1);
 
-          // Se for o ID específico do teste, criar dados de teste
-          if (id === "3c6dff36-4971-4f3e-ac56-701efa04cd86") {
-            console.log(
-              "🎯 Detectado ID de teste, criando dados automaticamente...",
+        console.log("🏥 Health check - acesso ao banco:", healthCheck !== null);
+
+        // Primeiro, verificar se o concurso existe
+        const { data: existeData, error: existeError } = await authClient
+          .from("competitions")
+          .select("id, user_id, title")
+          .eq("id", id);
+
+        if (existeError) {
+          console.error(
+            "❌ Erro ao verificar existência do concurso:",
+            existeError,
+          );
+          throw existeError;
+        }
+
+        console.log("📋 Resultado da verificação:", existeData);
+        if (existeData && existeData.length > 0) {
+          console.log(
+            "🔍 Concurso existe, pertence ao usuário:",
+            existeData[0].user_id,
+          );
+          if (existeData[0].user_id !== authUser.id) {
+            console.warn(
+              "⚠️ Concurso pertence a outro usuário:",
+              existeData[0].user_id,
+              "≠",
+              authUser.id,
             );
-            const testData = await createTestData(id);
-            if (testData) {
-              // Tentar buscar novamente após criar os dados
-              return await fetchConcursoCompleto(id);
+          }
+        } else {
+          console.warn("⚠️ Concurso não existe na base de dados");
+          if (
+            id.match(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+            )
+          ) {
+            console.log(
+              "💡 ID parece ser um UUID válido, mas concurso não existe",
+            );
+          }
+        }
+
+        // Buscar dados completos do concurso
+        const { data: concursoData, error: concursoError } = await authClient
+          .from("competitions")
+          .select(
+            "id, user_id, title, organizer, registration_date, exam_date, edital_link, status, created_at, updated_at",
+          )
+          .eq("id", id)
+          .eq("user_id", authUser.id)
+          .single();
+
+        if (concursoError) {
+          console.error("❌ Erro ao buscar concurso:", concursoError);
+          console.error("❌ Código do erro:", concursoError.code);
+          console.error("❌ Detalhes do erro:", concursoError.details);
+          console.error("❌ Mensagem:", concursoError.message);
+
+          if (concursoError.code === "PGRST116") {
+            console.warn(
+              "⚠️ Concurso não encontrado ou não pertence ao usuário",
+            );
+
+            // Se for o ID específico do teste, criar dados de teste
+            if (id === "3c6dff36-4971-4f3e-ac56-701efa04cd86") {
+              console.log(
+                "🎯 Detectado ID de teste, criando dados automaticamente...",
+              );
+              const testData = await createTestData(id);
+              if (testData) {
+                return await fetchConcursoCompleto(id, retryCount + 1);
+              }
+            }
+
+            // Listar concursos disponíveis
+            console.log("📋 Listando concursos disponíveis para o usuário...");
+            const { data: availableCompetitions } = await authClient
+              .from("competitions")
+              .select("id, title, status")
+              .eq("user_id", authUser.id)
+              .limit(5);
+
+            if (availableCompetitions && availableCompetitions.length > 0) {
+              console.log("📌 Concursos disponíveis:", availableCompetitions);
+            } else {
+              console.log("📭 Nenhum concurso encontrado para este usuário");
             }
           }
 
           return null;
         }
-        throw concursoError;
-      }
 
-      console.log("✅ Concurso encontrado:", concursoData.title);
+        console.log("✅ Concurso encontrado:", concursoData.title);
 
-      // Fetch subjects with topics in a single query using JOIN
-      const { data: disciplinasComTopicos, error: disciplinasError } =
-        await supabase
-          .from("competition_subjects")
-          .select(
-            `
+        // Fetch subjects with topics in a single query using JOIN
+        const { data: disciplinasComTopicos, error: disciplinasError } =
+          await authClient
+            .from("competition_subjects")
+            .select(
+              `
           id, competition_id, name, progress, created_at, updated_at,
           topicos:competition_topics(id, subject_id, name, completed, created_at, updated_at)
         `,
-          )
-          .eq("competition_id", id)
-          .order("created_at", { ascending: true });
+            )
+            .eq("competition_id", id)
+            .order("created_at", { ascending: true });
 
-      if (disciplinasError) throw disciplinasError;
+        if (disciplinasError) throw disciplinasError;
 
-      // Transform the data to match expected structure
-      const disciplinasFormatadas: Disciplina[] =
-        disciplinasComTopicos?.map((disciplina) => ({
-          ...disciplina,
-          topicos: disciplina.topicos || [],
-        })) || [];
+        // Transform the data to match expected structure
+        const disciplinasFormatadas: Disciplina[] =
+          disciplinasComTopicos?.map((disciplina) => ({
+            ...disciplina,
+            topicos: disciplina.topicos || [],
+          })) || [];
 
-      const resultado = {
-        ...concursoData,
-        disciplinas: disciplinasFormatadas,
-      } as Concurso;
+        const resultado = {
+          ...concursoData,
+          disciplinas: disciplinasFormatadas,
+        } as Concurso;
 
-      console.log("📊 Concurso completo carregado:", {
-        id: resultado.id,
-        titulo: resultado.title,
-        disciplinas: disciplinasFormatadas.length,
-        totalTopicos: disciplinasFormatadas.reduce(
-          (acc, d) => acc + (d.topicos?.length || 0),
-          0,
-        ),
+        console.log("📊 Concurso completo carregado:", {
+          id: resultado.id,
+          titulo: resultado.title,
+          disciplinas: disciplinasFormatadas.length,
+          totalTopicos: disciplinasFormatadas.reduce(
+            (acc, d) => acc + (d.topicos?.length || 0),
+            0,
+          ),
+        });
+
+        return resultado;
       });
+    } catch (error: any) {
+      console.error("❌ Erro inesperado ao buscar concurso:", error);
 
-      return resultado;
-    } catch (error) {
-      console.error("❌ Erro ao buscar concurso completo:", error);
+      // Tentar novamente em caso de erro de autenticação
+      if (
+        (error?.message?.includes("JWT") ||
+          error?.message?.includes("auth") ||
+          error?.message?.includes("unauthorized")) &&
+        retryCount < MAX_RETRIES
+      ) {
+        console.log("🔄 Erro de autenticação detectado, tentando novamente...");
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return await fetchConcursoCompleto(id, retryCount + 1);
+      }
+
       return null;
     }
   };
@@ -954,6 +1050,15 @@ export function useConcursos() {
     // Funções de busca
     fetchConcursos,
     fetchConcursoCompleto,
+    getUserCompetitions: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from("competitions")
+        .select("id, title, status, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      return data || [];
+    },
 
     // CRUD de Concursos (otimizado)
     createCompetition,

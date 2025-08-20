@@ -215,11 +215,28 @@ CREATE TRIGGER update_scheduled_payments_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
--- DADOS INICIAIS (CATEGORIAS PADRÃO)
+-- FUNÇÃO PARA CRIAR CATEGORIAS PADRÃO
 -- =====================================================
 
--- Inserir categorias padrão para novos usuários
--- Nota: Estas serão inseridas via aplicação quando o usuário se cadastrar
+-- Função para criar categorias padrão para novos usuários
+CREATE OR REPLACE FUNCTION create_default_expense_categories(user_uuid uuid)
+RETURNS void AS $$
+BEGIN
+    INSERT INTO expense_categories (user_id, name, color, icon) VALUES
+        (user_uuid, 'Alimentação', '#f59e0b', '🍽️'),
+        (user_uuid, 'Transporte', '#3b82f6', '🚗'),
+        (user_uuid, 'Moradia', '#10b981', '🏠'),
+        (user_uuid, 'Saúde', '#ef4444', '⚕️'),
+        (user_uuid, 'Educação', '#8b5cf6', '📚'),
+        (user_uuid, 'Lazer', '#f97316', '🎯'),
+        (user_uuid, 'Compras', '#ec4899', '🛍️'),
+        (user_uuid, 'Outros', '#6b7280', '📋')
+    ON CONFLICT (user_id, name) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Garantir que a função seja executável por usuários autenticados
+GRANT EXECUTE ON FUNCTION create_default_expense_categories TO authenticated;
 
 -- =====================================================
 -- COMENTÁRIOS ADICIONAIS
@@ -230,8 +247,25 @@ COMMENT ON TABLE expenses IS 'Registro de despesas e gastos do usuário';
 COMMENT ON TABLE virtual_envelopes IS 'Sistema de envelopes virtuais para controle orçamentário';
 COMMENT ON TABLE scheduled_payments IS 'Pagamentos agendados e recorrentes do usuário';
 
+COMMENT ON COLUMN expense_categories.name IS 'Nome da categoria de despesa';
+COMMENT ON COLUMN expense_categories.color IS 'Cor da categoria em formato hexadecimal (#RRGGBB)';
+COMMENT ON COLUMN expense_categories.icon IS 'Ícone emoji da categoria (opcional)';
+
+COMMENT ON COLUMN expenses.description IS 'Descrição da despesa (máximo 200 caracteres)';
+COMMENT ON COLUMN expenses.amount IS 'Valor da despesa (deve ser positivo)';
+COMMENT ON COLUMN expenses.date IS 'Data da despesa';
 COMMENT ON COLUMN expenses.notes IS 'Campo opcional para observações adicionais sobre a despesa';
+
+COMMENT ON COLUMN virtual_envelopes.name IS 'Nome do envelope virtual';
+COMMENT ON COLUMN virtual_envelopes.color IS 'Cor do envelope em formato hexadecimal (#RRGGBB)';
+COMMENT ON COLUMN virtual_envelopes.total_amount IS 'Valor total disponível no envelope';
 COMMENT ON COLUMN virtual_envelopes.used_amount IS 'Valor já utilizado do envelope virtual';
+
+COMMENT ON COLUMN scheduled_payments.title IS 'Título do pagamento agendado';
+COMMENT ON COLUMN scheduled_payments.amount IS 'Valor do pagamento';
+COMMENT ON COLUMN scheduled_payments.due_date IS 'Data de vencimento do pagamento';
+COMMENT ON COLUMN scheduled_payments.is_recurring IS 'Indica se o pagamento é recorrente';
 COMMENT ON COLUMN scheduled_payments.recurrence_type IS 'Tipo de recorrência: monthly, weekly ou yearly';
+COMMENT ON COLUMN scheduled_payments.is_paid IS 'Indica se o pagamento foi realizado';
 
 COMMIT;

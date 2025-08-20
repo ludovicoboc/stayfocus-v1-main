@@ -3,8 +3,8 @@ const isCI = process.env.CI === "true";
 
 const nextConfig = {
   // Configurações condicionais para CI vs desenvolvimento local
-  typescript: { ignoreBuildErrors: !isCI },
-  eslint: { ignoreDuringBuilds: !isCI },
+  typescript: { ignoreBuildErrors: false },
+  eslint: { ignoreDuringBuilds: false },
   images: {
     unoptimized: true,
   },

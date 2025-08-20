@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS study_sessions (
 );
 
 -- Comentários para a tabela study_sessions
-COMMENT ON TABLE study_sessions IS 'Registra as sessões de estudo dos usuários com detalhes sobre matéria, tópico e progresso';
+COMMENT ON TABLE study_sessions IS 'Registra as sessões de estudo dos usuários com detalhes sobre matéria, tópico e progresso, integrada aos concursos';
+COMMENT ON COLUMN study_sessions.competition_id IS 'Vincula a sessão de estudo a um concurso específico';
 COMMENT ON COLUMN study_sessions.subject IS 'Matéria ou disciplina estudada (ex: Matemática, Português)';
 COMMENT ON COLUMN study_sessions.topic IS 'Tópico específico dentro da matéria (ex: Álgebra Linear)';
 COMMENT ON COLUMN study_sessions.duration_minutes IS 'Duração planejada da sessão em minutos (1-1440)';
@@ -182,9 +183,10 @@ CREATE TRIGGER sync_pomodoro_cycles_trigger
     EXECUTE FUNCTION sync_pomodoro_cycles();
 
 -- ==========================================
--- FUNÇÃO PARA CALCULAR ESTATÍSTICAS DE ESTUDO
+-- FUNÇÕES PARA ESTATÍSTICAS DE ESTUDO
 -- ==========================================
 
+-- Função para calcular estatísticas gerais de estudo
 CREATE OR REPLACE FUNCTION get_study_statistics(p_user_id UUID)
 RETURNS TABLE (
     total_sessions BIGINT,
@@ -206,8 +208,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Comentário para a função
-COMMENT ON FUNCTION get_study_statistics(UUID) IS 'Calcula estatísticas de estudo para um usuário específico';
+-- Função para calcular estatísticas de estudo por concurso
+CREATE OR REPLACE FUNCTION get_competition_study_statistics(p_user_id UUID, p_competition_id UUID)
+RETURNS TABLE (
+    total_sessions BIGINT,
+    completed_sessions BIGINT,
+    total_study_time INTEGER,
+    total_pomodoro_cycles INTEGER,
+    avg_session_duration NUMERIC,
+    subjects_studied TEXT[]
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        COUNT(*) as total_sessions,
+        COUNT(*) FILTER (WHERE completed = true) as completed_sessions,
+        COALESCE(SUM(duration_minutes), 0)::INTEGER as total_study_time,
+        COALESCE(SUM(pomodoro_cycles), 0)::INTEGER as total_pomodoro_cycles,
+        ROUND(AVG(duration_minutes), 2) as avg_session_duration,
+        ARRAY_AGG(DISTINCT subject) as subjects_studied
+    FROM study_sessions 
+    WHERE user_id = p_user_id AND competition_id = p_competition_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Comentários para as funções
+COMMENT ON FUNCTION get_study_statistics(UUID) IS 'Calcula estatísticas gerais de estudo para um usuário específico';
+COMMENT ON FUNCTION get_competition_study_statistics(UUID, UUID) IS 'Calcula estatísticas de estudo para um usuário em um concurso específico';
 
 -- ==========================================
 -- FUNÇÃO PARA LIMPEZA DE SESSÕES ANTIGAS

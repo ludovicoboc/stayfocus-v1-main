@@ -554,6 +554,22 @@ export default function ConcursoDetalhesPage() {
             </div>
           </div>
 
+          {/* Botões de Ação */}
+          <div className="flex flex-wrap gap-3 mt-6 pt-4 border-t border-slate-700">
+            <Link href={`/concursos/${id}/questoes`}>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Brain className="w-4 h-4 mr-2" />
+                Ver Questões
+              </Button>
+            </Link>
+            <Link href={`/concursos/${id}/simulados`}>
+              <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                <Award className="w-4 h-4 mr-2" />
+                Simulados
+              </Button>
+            </Link>
+          </div>
+
           {/* Informações das datas */}
           <div className="flex justify-between items-center mt-6 pt-4 border-t border-slate-700">
             <div className="flex items-center space-x-6">

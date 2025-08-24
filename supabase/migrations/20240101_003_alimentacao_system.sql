@@ -1,12 +1,14 @@
--- Migration: Criar tabelas do módulo de alimentação
--- Criado em: 2024-01-01
--- Descrição: Tabelas para receitas, planejamento de refeições, registro de refeições, hidratação e lista de compras
+-- =====================================================
+-- MIGRATION 003: Alimentação System
+-- Description: Complete food management system (recipes, meal planning, shopping lists)
+-- Date: 2024-01-01
+-- =====================================================
 
 BEGIN;
 
--- =====================================================================================
+-- =====================================================
 -- TABELAS
--- =====================================================================================
+-- =====================================================
 
 -- Tabela: receitas
 -- Descrição: Armazena as receitas criadas pelos usuários
@@ -74,9 +76,9 @@ CREATE TABLE IF NOT EXISTS hydration_records (
   UNIQUE(user_id, date)
 );
 
--- =====================================================================================
+-- =====================================================
 -- POLÍTICAS RLS (Row Level Security)
--- =====================================================================================
+-- =====================================================
 
 -- Habilitar RLS para todas as tabelas
 ALTER TABLE receitas ENABLE ROW LEVEL SECURITY;
@@ -85,115 +87,52 @@ ALTER TABLE meal_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meal_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hydration_records ENABLE ROW LEVEL SECURITY;
 
--- Políticas para tabela receitas
-CREATE POLICY "Users can view their own receitas" ON receitas
-  FOR SELECT USING (auth.uid() = user_id);
+-- Políticas simplificadas para todas as operações
+CREATE POLICY "Users can manage their own receitas" ON receitas FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own lista_compras" ON lista_compras FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own meal_plans" ON meal_plans FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own meal_records" ON meal_records FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own hydration_records" ON hydration_records FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert their own receitas" ON receitas
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own receitas" ON receitas
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own receitas" ON receitas
-  FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para tabela lista_compras
-CREATE POLICY "Users can view their own lista_compras" ON lista_compras
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own lista_compras" ON lista_compras
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own lista_compras" ON lista_compras
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own lista_compras" ON lista_compras
-  FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para tabela meal_plans
-CREATE POLICY "Users can view their own meal_plans" ON meal_plans
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own meal_plans" ON meal_plans
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own meal_plans" ON meal_plans
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own meal_plans" ON meal_plans
-  FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para tabela meal_records
-CREATE POLICY "Users can view their own meal_records" ON meal_records
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own meal_records" ON meal_records
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own meal_records" ON meal_records
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own meal_records" ON meal_records
-  FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para tabela hydration_records
-CREATE POLICY "Users can view their own hydration_records" ON hydration_records
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own hydration_records" ON hydration_records
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own hydration_records" ON hydration_records
-  FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own hydration_records" ON hydration_records
-  FOR DELETE USING (auth.uid() = user_id);
-
--- =====================================================================================
+-- =====================================================
 -- ÍNDICES
--- =====================================================================================
+-- =====================================================
 
--- Índices para otimizar consultas frequentes
+-- Índices para receitas
 CREATE INDEX IF NOT EXISTS idx_receitas_user_id ON receitas(user_id);
 CREATE INDEX IF NOT EXISTS idx_receitas_categoria ON receitas(categoria);
 CREATE INDEX IF NOT EXISTS idx_receitas_favorita ON receitas(favorita) WHERE favorita = true;
 CREATE INDEX IF NOT EXISTS idx_receitas_created_at ON receitas(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_receitas_user_categoria ON receitas(user_id, categoria);
 
+-- Índices para lista_compras
 CREATE INDEX IF NOT EXISTS idx_lista_compras_user_id ON lista_compras(user_id);
 CREATE INDEX IF NOT EXISTS idx_lista_compras_categoria ON lista_compras(categoria);
 CREATE INDEX IF NOT EXISTS idx_lista_compras_comprado ON lista_compras(comprado);
 CREATE INDEX IF NOT EXISTS idx_lista_compras_receita_id ON lista_compras(receita_id);
 CREATE INDEX IF NOT EXISTS idx_lista_compras_user_categoria ON lista_compras(user_id, categoria);
 
+-- Índices para meal_plans
 CREATE INDEX IF NOT EXISTS idx_meal_plans_user_id ON meal_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_time ON meal_plans(time);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_user_time ON meal_plans(user_id, time);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_user_date ON meal_plans(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_date ON meal_plans(date DESC);
 
+-- Índices para meal_records
 CREATE INDEX IF NOT EXISTS idx_meal_records_user_id ON meal_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_records_created_at ON meal_records(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_meal_records_user_date ON meal_records(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_meal_records_date ON meal_records(date DESC);
 
+-- Índices para hydration_records
 CREATE INDEX IF NOT EXISTS idx_hydration_records_user_id ON hydration_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_hydration_records_date ON hydration_records(date DESC);
 CREATE INDEX IF NOT EXISTS idx_hydration_records_user_date ON hydration_records(user_id, date);
 
--- =====================================================================================
+-- =====================================================
 -- TRIGGERS
--- =====================================================================================
-
--- Função para atualizar updated_at automaticamente
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- =====================================================
 
 -- Triggers para atualizar updated_at
 CREATE TRIGGER trigger_receitas_updated_at
@@ -216,9 +155,9 @@ CREATE TRIGGER trigger_hydration_records_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
--- =====================================================================================
+-- =====================================================
 -- COMENTÁRIOS
--- =====================================================================================
+-- =====================================================
 
 -- Comentários nas tabelas
 COMMENT ON TABLE receitas IS 'Armazena receitas criadas pelos usuários com ingredientes, modo de preparo e informações nutricionais básicas';

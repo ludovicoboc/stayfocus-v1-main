@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase";
+import { authCache } from "@/lib/auth-cache";
+import { validateAuthState, onAuthStateChange } from "@/lib/auth-utils";
 import type { User, Session } from "@supabase/supabase-js";
 
 export function useAuth() {
@@ -11,129 +13,74 @@ export function useAuth() {
   const [initialized, setInitialized] = useState(false);
   const supabase = createClient();
 
-  useEffect(() => {
-    let mounted = true;
+  // Função para inicializar autenticação usando cache
+  const initializeAuth = useCallback(async () => {
+    if (!initialized) {
+      console.log("🔐 [USE-AUTH] Inicializando autenticação...");
+      
+      // Primeiro, tentar usar cache
+      const cached = authCache.getCachedAuth();
+      if (cached) {
+        console.log("✅ [USE-AUTH] Usando dados do cache");
+        setUser(cached.user);
+        setSession(cached.session);
+        setLoading(false);
+        setInitialized(true);
+        return;
+      }
 
-    // Função para verificar usuário atual
-    const getUser = async () => {
+      // Se não há cache, fazer validação completa
       try {
-        console.log("🔐 Verificando estado de autenticação...");
-
-        // Primeiro, tentar obter a sessão atual
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error("❌ Erro ao obter sessão:", sessionError);
-          if (mounted) {
-            setUser(null);
-            setSession(null);
-            setLoading(false);
-            setInitialized(true);
-          }
-          return;
-        }
-
-        if (session?.user) {
-          console.log("✅ Sessão válida encontrada:", {
-            userId: session.user.id,
-            email: session.user.email,
-            expiresAt: new Date(session.expires_at! * 1000).toISOString(),
-          });
-
-          if (mounted) {
-            setUser(session.user);
-            setSession(session);
-          }
+        const { user: validatedUser, error } = await validateAuthState();
+        
+        setUser(validatedUser);
+        setSession(authCache.getCachedAuth()?.session || null);
+        
+        if (error) {
+          console.log("ℹ️ [USE-AUTH] Usuário não autenticado:", error);
         } else {
-          console.log("ℹ️ Nenhuma sessão ativa encontrada");
-          if (mounted) {
-            setUser(null);
-            setSession(null);
-          }
-        }
-
-        // Verificar se o token ainda é válido fazendo uma chamada de teste
-        if (session?.user) {
-          try {
-            const { data, error } = await supabase.auth.getUser();
-            if (error) {
-              console.warn("⚠️ Token inválido ou expirado:", error.message);
-              if (mounted) {
-                setUser(null);
-                setSession(null);
-              }
-            } else if (data.user) {
-              console.log("✅ Token validado com sucesso");
-              if (mounted) {
-                setUser(data.user);
-              }
-            }
-          } catch (tokenError) {
-            console.error("❌ Erro ao validar token:", tokenError);
-            if (mounted) {
-              setUser(null);
-              setSession(null);
-            }
-          }
+          console.log("✅ [USE-AUTH] Usuário autenticado:", {
+            userId: validatedUser?.id?.substring(0, 8) + "...",
+            email: validatedUser?.email
+          });
         }
       } catch (error) {
-        console.error("❌ Erro geral ao verificar usuário:", error);
-        if (mounted) {
-          setUser(null);
-          setSession(null);
-        }
+        console.error("❌ [USE-AUTH] Erro na inicialização:", error);
+        setUser(null);
+        setSession(null);
       } finally {
-        if (mounted) {
-          setLoading(false);
-          setInitialized(true);
-        }
-      }
-    };
-
-    getUser();
-
-    // Escutar mudanças de autenticação
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔄 Mudança de estado de autenticação:", event, {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        email: session?.user?.email,
-      });
-
-      if (mounted) {
-        setUser(session?.user ?? null);
-        setSession(session);
         setLoading(false);
         setInitialized(true);
       }
+    }
+  }, [initialized]);
 
-      // Log específico para diferentes eventos
-      switch (event) {
-        case "SIGNED_IN":
-          console.log("✅ Usuário logado com sucesso");
-          break;
-        case "SIGNED_OUT":
-          console.log("👋 Usuário deslogado");
-          break;
-        case "TOKEN_REFRESHED":
-          console.log("🔄 Token renovado automaticamente");
-          break;
-        case "PASSWORD_RECOVERY":
-          console.log("🔑 Processo de recuperação de senha iniciado");
-          break;
+  useEffect(() => {
+    let mounted = true;
+
+    // Inicializar autenticação
+    initializeAuth();
+
+    // Escutar mudanças de autenticação usando auth-utils otimizado
+    const unsubscribe = onAuthStateChange((user) => {
+      if (mounted) {
+        console.log("🔄 [USE-AUTH] Auth state changed:", {
+          hasUser: !!user,
+          userId: user?.id?.substring(0, 8) + "..." || "none"
+        });
+        
+        setUser(user);
+        setSession(authCache.getCachedAuth()?.session || null);
+        setLoading(false);
+        setInitialized(true);
       }
     });
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      unsubscribe();
     };
-  }, [supabase.auth]);
+  }, [initializeAuth]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -196,20 +143,27 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      console.log("👋 Fazendo logout...");
+      console.log("👋 [USE-AUTH] Fazendo logout...");
       setLoading(true);
 
       const { error } = await supabase.auth.signOut();
+      
+      // Limpar cache independentemente do resultado
+      authCache.clearCache();
+      
       if (error) {
-        console.error("❌ Erro no logout:", error.message);
+        console.error("❌ [USE-AUTH] Erro no logout:", error.message);
         throw error;
       }
 
-      console.log("✅ Logout realizado com sucesso");
+      console.log("✅ [USE-AUTH] Logout realizado com sucesso");
       setUser(null);
       setSession(null);
     } catch (error) {
-      console.error("❌ Erro ao fazer logout:", error);
+      console.error("❌ [USE-AUTH] Erro ao fazer logout:", error);
+      // Limpar estado local mesmo em caso de erro
+      setUser(null);
+      setSession(null);
       throw error;
     } finally {
       setLoading(false);
@@ -218,18 +172,26 @@ export function useAuth() {
 
   const refreshSession = async () => {
     try {
-      console.log("🔄 Renovando sessão...");
+      console.log("🔄 [USE-AUTH] Renovando sessão...");
       const { data, error } = await supabase.auth.refreshSession();
 
       if (error) {
-        console.error("❌ Erro ao renovar sessão:", error.message);
+        console.error("❌ [USE-AUTH] Erro ao renovar sessão:", error.message);
+        authCache.clearCache();
         throw error;
       }
 
-      console.log("✅ Sessão renovada com sucesso");
+      if (data.session?.user) {
+        // Atualizar cache com nova sessão
+        authCache.setCachedAuth(data.session.user, data.session);
+        setUser(data.session.user);
+        setSession(data.session);
+      }
+
+      console.log("✅ [USE-AUTH] Sessão renovada com sucesso");
       return data;
     } catch (error) {
-      console.error("❌ Erro ao renovar sessão:", error);
+      console.error("❌ [USE-AUTH] Erro ao renovar sessão:", error);
       throw error;
     }
   };

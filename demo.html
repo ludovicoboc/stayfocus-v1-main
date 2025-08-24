@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demonstração Playwright</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .red-button {
+            background-color: #f44336;
+        }
+        .red-button:hover {
+            background-color: #da190b;
+        }
+        .input-field {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 300px;
+            margin: 10px 5px;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e8f5e8;
+            border-radius: 5px;
+            min-height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎭 Demonstração Playwright</h1>
+        <p>Esta página foi criada para demonstrar as funcionalidades do Playwright!</p>
+        
+        <h2>Elementos Interativos:</h2>
+        
+        <div>
+            <input type="text" id="nameInput" class="input-field" placeholder="Digite seu nome aqui">
+            <button id="submitBtn" class="button">Enviar</button>
+        </div>
+        
+        <div>
+            <button id="alertBtn" class="button red-button">Mostrar Alerta</button>
+            <button id="changeColorBtn" class="button">Mudar Cor de Fundo</button>
+        </div>
+        
+        <div id="output">
+            <p>Resultado aparecerá aqui...</p>
+        </div>
+        
+        <h2>Lista de Itens:</h2>
+        <ul id="itemList">
+            <li>Item 1</li>
+            <li>Item 2</li>
+            <li>Item 3</li>
+        </ul>
+        
+        <button id="addItemBtn" class="button">Adicionar Item</button>
+    </div>
+
+    <script>
+        let itemCount = 3;
+        
+        document.getElementById('submitBtn').addEventListener('click', function() {
+            const name = document.getElementById('nameInput').value;
+            const output = document.getElementById('output');
+            if (name.trim()) {
+                output.innerHTML = `<p>Olá, <strong>${name}</strong>! Bem-vindo(a) à demonstração!</p>`;
+            } else {
+                output.innerHTML = '<p style="color: red;">Por favor, digite um nome.</p>';
+            }
+        });
+        
+        document.getElementById('alertBtn').addEventListener('click', function() {
+            alert('Este é um alerta do JavaScript!');
+        });
+        
+        document.getElementById('changeColorBtn').addEventListener('click', function() {
+            const colors = ['#f0f0f0', '#e8f5e8', '#f0e8e8', '#e8e8f5', '#f5f0e8'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            document.body.style.backgroundColor = randomColor;
+        });
+        
+        document.getElementById('addItemBtn').addEventListener('click', function() {
+            itemCount++;
+            const list = document.getElementById('itemList');
+            const newItem = document.createElement('li');
+            newItem.textContent = `Item ${itemCount}`;
+            list.appendChild(newItem);
+        });
+    </script>
+</body>
+</html>

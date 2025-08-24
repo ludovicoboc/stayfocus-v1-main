@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { authCache } from "./lib/auth-cache";
 
 export async function middleware(request: NextRequest) {
   // Criar resposta inicial
@@ -136,62 +137,84 @@ export async function middleware(request: NextRequest) {
         `🔒 [MIDDLEWARE] Verificando autenticação para rota protegida: ${pathname}`,
       );
 
-      // Verificação de sessão com retry
-      let session = null;
-      let sessionError = null;
+      // Primeiro, tentar usar cache se disponível
+      const cached = authCache.getCachedAuth();
+      let isAuthenticated = false;
 
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        session = data.session;
-        sessionError = error;
-
-        if (error) {
-          console.error(
-            `❌ [MIDDLEWARE] Erro ao obter sessão: ${error.message}`,
-          );
-        }
-
-        if (session) {
+      if (cached && cached.isValid) {
+        // Verificar se a sessão ainda é válida considerando o buffer
+        if (authCache.isSessionStillValid(cached.session)) {
           console.log(
-            `✅ [MIDDLEWARE] Sessão válida encontrada: ${session.user?.id?.substring(0, 8)}...`,
+            `✅ [MIDDLEWARE] Autenticação válida (cache): ${cached.user?.id?.substring(0, 8)}...`,
           );
-          console.log(
-            `⏰ [MIDDLEWARE] Sessão expira em: ${session.expires_at ? new Date(session.expires_at * 1000).toISOString() : "nunca"}`,
-          );
-
-          // Verificar se a sessão não expirou
-          const now = Math.floor(Date.now() / 1000);
-          if (session.expires_at && session.expires_at <= now) {
-            console.warn(
-              `⚠️ [MIDDLEWARE] Sessão expirada há ${now - session.expires_at} segundos`,
-            );
-            session = null;
-          }
+          isAuthenticated = true;
         } else {
-          console.warn(`⚠️ [MIDDLEWARE] Nenhuma sessão encontrada`);
+          console.log(`⚠️ [MIDDLEWARE] Cache expirado, limpando`);
+          authCache.clearCache();
         }
-      } catch (authError) {
-        console.error(
-          `❌ [MIDDLEWARE] Erro na verificação de autenticação:`,
-          authError,
-        );
-        sessionError = authError;
       }
 
-      // Se há cookies de autenticação mas não conseguimos obter a sessão,
-      // vamos ser mais permissivos e permitir o acesso
-      if (!session && authCookies.length > 0) {
-        console.log(
-          `🤔 [MIDDLEWARE] Sem sessão mas com cookies auth (${authCookies.length}), permitindo acesso`,
-        );
-        console.log(
-          `🔄 [MIDDLEWARE] Client-side vai tentar recuperar autenticação`,
-        );
-        return addSecurityHeaders(response, startTime, pathname);
+      // Se não há cache válido, fazer verificação otimizada
+      if (!isAuthenticated) {
+        let session = null;
+        let sessionError = null;
+
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          session = data.session;
+          sessionError = error;
+
+          if (error) {
+            console.error(
+              `❌ [MIDDLEWARE] Erro ao obter sessão: ${error.message}`,
+            );
+          }
+
+          if (session?.user) {
+            console.log(
+              `✅ [MIDDLEWARE] Sessão válida encontrada: ${session.user.id?.substring(0, 8)}...`,
+            );
+            
+            // Verificar se a sessão não expirou
+            const now = Math.floor(Date.now() / 1000);
+            const sessionBuffer = 30; // 30 segundos de buffer
+            
+            if (session.expires_at && session.expires_at <= (now + sessionBuffer)) {
+              console.warn(
+                `⚠️ [MIDDLEWARE] Sessão prestes a expirar ou expirada`,
+              );
+              session = null;
+            } else {
+              // Atualizar cache com nova sessão válida
+              authCache.setCachedAuth(session.user, session);
+              isAuthenticated = true;
+            }
+          } else {
+            console.warn(`⚠️ [MIDDLEWARE] Nenhuma sessão encontrada`);
+          }
+        } catch (authError) {
+          console.error(
+            `❌ [MIDDLEWARE] Erro na verificação de autenticação:`,
+            authError,
+          );
+          sessionError = authError;
+        }
+
+        // Se há cookies de autenticação mas não conseguimos obter a sessão,
+        // ser mais permissivo (client-side pode recuperar)
+        if (!isAuthenticated && authCookies.length > 0) {
+          console.log(
+            `🤔 [MIDDLEWARE] Sem sessão mas com cookies auth (${authCookies.length}), permitindo acesso`,
+          );
+          console.log(
+            `🔄 [MIDDLEWARE] Client-side vai tentar recuperar autenticação`,
+          );
+          return addSecurityHeaders(response, startTime, pathname);
+        }
       }
 
-      // Se não há sessão e não há cookies de auth, redirecionar para login
-      if (!session && authCookies.length === 0) {
+      // Se não autenticado e sem cookies, redirecionar para login
+      if (!isAuthenticated && authCookies.length === 0) {
         console.log(
           `🚫 [MIDDLEWARE] Sem autenticação, redirecionando para login`,
         );
@@ -202,8 +225,10 @@ export async function middleware(request: NextRequest) {
         return addSecurityHeaders(redirectResponse, startTime, pathname);
       }
 
-      // Se chegou até aqui, usuário está autenticado ou tem potencial de estar
-      console.log(`✅ [MIDDLEWARE] Acesso autorizado para: ${pathname}`);
+      // Se chegou até aqui, usuário está autenticado
+      if (isAuthenticated) {
+        console.log(`✅ [MIDDLEWARE] Acesso autorizado para: ${pathname}`);
+      }
     }
 
     // Tratamento especial para página de auth

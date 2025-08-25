@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { useSimulados } from "@/hooks/use-simulados"
 import { SimuladoReview } from "@/components/simulado-review"
 import { SimuladoResults } from "@/components/simulado-results"

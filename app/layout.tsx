@@ -4,6 +4,7 @@ import { Inter, Geist } from "next/font/google"
 import "./globals.css"
 import { AppHeader } from "@/components/app-header"
 import { ThemeProvider } from "@/components/theme-provider"
+import { AuthProvider } from "@/lib/auth-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { ServiceWorkerManager } from "@/components/service-worker-manager"
 // import { PerformanceAlerts } from "@/components/performance-alerts" // Temporariamente desabilitado
@@ -81,16 +82,18 @@ export default function RootLayout({
           enableSystem={true} 
           disableTransitionOnChange
         >
-          <div className="flex h-screen overflow-hidden">
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <AppHeader />
-              <main className="flex-1 overflow-y-auto p-4">
-                {children}
-              </main>
+          <AuthProvider>
+            <div className="flex h-screen overflow-hidden">
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <AppHeader />
+                <main className="flex-1 overflow-y-auto p-4">
+                  {children}
+                </main>
+              </div>
             </div>
-          </div>
-          <Toaster />
-          {/* <PerformanceAlerts /> */}
+            <Toaster />
+            {/* <PerformanceAlerts /> */}
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

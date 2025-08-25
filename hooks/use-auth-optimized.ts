@@ -119,11 +119,12 @@ export function useAuthOptimized(options: UseAuthOptions = {}) {
   const debouncedAuthCheck = useMemo(
     () => debounce(async (forceRefresh = false) => {
       if (authCheckRef.current && !forceRefresh) {
-
+        console.log('⏳ [USE-AUTH-OPTIMIZED] Verificação em andamento, ignorando chamada duplicada');
         return;
       }
 
       authCheckRef.current = true;
+      console.log('🔐 [USE-AUTH-OPTIMIZED] Iniciando verificação de autenticação', { forceRefresh });
       
       try {
         const { user, session } = await getSessionOptimized(forceRefresh);
@@ -136,6 +137,7 @@ export function useAuthOptimized(options: UseAuthOptions = {}) {
           initialized: true
         }));
 
+        console.log('✅ [USE-AUTH-OPTIMIZED] Verificação concluída com sucesso', { hasUser: !!user });
       } catch (error) {
         console.error("❌ [USE-AUTH-OPTIMIZED] Erro no auth check:", error);
         setAuthState(prev => ({

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth-provider";
 import { PlanejadorRefeicoes } from "@/components/planejador-refeicoes";
 import { RegistroRefeicoes } from "@/components/registro-refeicoes";
 import { LembreteHidratacao } from "@/components/lembrete-hidratacao";

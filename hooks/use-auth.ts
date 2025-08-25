@@ -1,32 +1,23 @@
 "use client";
 
-import { useAuthOptimized } from "@/hooks/use-auth-optimized";
+// IMPORTANTE: Este arquivo agora é apenas para compatibilidade
+// O hook real está no AuthProvider
+// Recomenda-se migrar para: import { useAuth } from "@/lib/auth-provider"
+
+import { useAuth as useAuthContext } from "@/lib/auth-provider";
 import type { User, Session } from "@supabase/supabase-js";
 
 /**
- * Hook de autenticação compatível com a versão anterior
- * Agora usa internamente o sistema otimizado com cache e debouncing
+ * @deprecated Use useAuth from @/lib/auth-provider instead
+ * Este hook está mantido apenas para compatibilidade com código existente
+ * 
+ * Para migrar:
+ * - Altere: import { useAuth } from "@/hooks/use-auth"
+ * - Para: import { useAuth } from "@/lib/auth-provider"
  */
 export function useAuth() {
-  // Usar versão otimizada internamente
-  const optimizedAuth = useAuthOptimized({
-    enableCache: true,
-    debounceTime: 300,
-    enableBackgroundRefresh: true
-  });
-
-  // Manter compatibilidade com interface anterior
-  return {
-    user: optimizedAuth.user,
-    session: optimizedAuth.session,
-    loading: optimizedAuth.loading,
-    initialized: optimizedAuth.initialized,
-    signIn: optimizedAuth.signIn,
-    signUp: optimizedAuth.signUp,
-    signOut: optimizedAuth.signOut,
-    // Adicionar função de compatibilidade
-    getCurrentSession: optimizedAuth.getCurrentSession
-  };
+  console.warn('⚠️ [USE-AUTH] Hook legado detectado. Migre para @/lib/auth-provider para melhor performance');
+  return useAuthContext();
 }
 
 // === IMPLEMENTAÇÃO ANTERIOR (MANTIDA PARA REFERÊNCIA) ===

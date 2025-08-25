@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth-provider";
 import { useConcursos } from "@/hooks/use-concursos";
 import { competitionCache } from "@/lib/cache-manager";
 import { envValidator } from "@/lib/env-validator";

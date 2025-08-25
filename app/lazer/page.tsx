@@ -1,6 +1,6 @@
 "use client"
 
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { TemporizadorLazer } from "@/components/temporizador-lazer"

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { UserAccountDropdown } from '../user-account-dropdown'
-import { useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/lib/auth-provider'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
 

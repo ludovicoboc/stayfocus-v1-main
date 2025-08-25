@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { useSelfKnowledge, type SelfKnowledgeCategory, type SelfKnowledgeNote } from "@/hooks/use-self-knowledge"
 import { ListaNotas } from "@/components/lista-notas"
 import { EditorNotas } from "@/components/editor-notas"

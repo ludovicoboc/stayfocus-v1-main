@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { useHiperfocos } from "@/hooks/use-hiperfocos"
 import { ConversorInteresses } from "@/components/conversor-interesses"
 import { SistemaAlternancia } from "@/components/sistema-alternancia"

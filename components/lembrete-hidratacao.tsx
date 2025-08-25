@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Droplets } from "lucide-react"
 import { createClient } from "@/lib/supabase"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 
 export function LembreteHidratacao() {
   const { user } = useAuth()

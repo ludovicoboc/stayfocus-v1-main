@@ -189,10 +189,12 @@ export default function DashboardPage() {
                       >
                         <div>
                           <div className="text-sm font-medium text-white">{medicamento.nome}</div>
-                          {medicamento.horario && <div className="text-xs text-slate-400">{medicamento.horario}</div>}
+                          {medicamento.horarios && medicamento.horarios.length > 0 && (
+                            <div className="text-xs text-slate-400">{medicamento.horarios[0]}</div>
+                          )}
                         </div>
                         <div
-                          className={`w-3 h-3 rounded-full ${medicamento.tomado ? "bg-green-400" : "bg-yellow-400"}`}
+                          className={`w-3 h-3 rounded-full ${medicamento.tomado_hoje ? "bg-green-400" : "bg-yellow-400"}`}
                         />
                       </div>
                     ))}

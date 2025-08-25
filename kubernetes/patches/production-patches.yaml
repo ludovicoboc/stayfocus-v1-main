@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stayfocus-app
+  namespace: stayfocus
+spec:
+  template:
+    spec:
+      containers:
+      - name: stayfocus-app
+        # Configurações específicas de produção
+        env:
+        - name: NEXT_PUBLIC_DEBUG
+          value: "false"
+        - name: NODE_ENV
+          value: "production"
+        # Recursos otimizados para produção
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"

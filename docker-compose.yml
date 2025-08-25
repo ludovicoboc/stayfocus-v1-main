@@ -1,0 +1,182 @@
+# docker-compose.yml para stayfocus-alimentacao
+
+services:
+  # Aplicação principal - desenvolvimento
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: https://zwkezbqllcmjcrlxjvyw.supabase.co
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3a2V6YnFsbGNtamNybHhqdnl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5OTc4NzcsImV4cCI6MjA3MTU3Mzg3N30.cMeCA5NB1jEyzZU-hZFUgymifEbcHnqXFjCWOMU-LBw
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    container_name: stayfocus-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - WATCHPACK_POLLING=true
+    env_file:
+      - .env.local
+    volumes:
+      # Bind mount para desenvolvimento com hot reload
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+    networks:
+      - stayfocus-network
+    profiles:
+      - dev
+    restart: unless-stopped
+
+  # Aplicação principal - produção
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: https://zwkezbqllcmjcrlxjvyw.supabase.co
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3a2V6YnFsbGNtamNybHhqdnl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5OTc4NzcsImV4cCI6MjA3MTU3Mzg3N30.cMeCA5NB1jEyzZU-hZFUgymifEbcHnqXFjCWOMU-LBw
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    container_name: stayfocus-prod
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    env_file:
+      - .env.production
+    networks:
+      - stayfocus-network
+    profiles:
+      - prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Nginx reverse proxy (opcional para produção)
+  nginx:
+    image: nginx:alpine
+    container_name: stayfocus-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/ssl/certs:ro
+    depends_on:
+      - app-prod
+    networks:
+      - stayfocus-network
+    profiles:
+      - prod
+      - nginx
+    restart: unless-stopped
+
+  # Redis para cache (opcional)
+  redis:
+    image: redis:7-alpine
+    container_name: stayfocus-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-stayfocus123}
+    networks:
+      - stayfocus-network
+    profiles:
+      - cache
+      - prod
+    restart: unless-stopped
+
+  # Supabase local (opcional para desenvolvimento completo)
+  supabase-db:
+    image: supabase/postgres:15.1.0.117
+    container_name: stayfocus-db
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${POSTGRES_DB:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - stayfocus-network
+    profiles:
+      - supabase-local
+    restart: unless-stopped
+
+  supabase-auth:
+    image: supabase/gotrue:v2.143.0
+    container_name: stayfocus-auth
+    ports:
+      - "9999:9999"
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-postgres}?search_path=auth
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+    depends_on:
+      - supabase-db
+    networks:
+      - stayfocus-network
+    profiles:
+      - supabase-local
+    restart: unless-stopped
+
+  supabase-rest:
+    image: postgrest/postgrest:v12.0.1
+    container_name: stayfocus-rest
+    ports:
+      - "3001:3000"
+    environment:
+      PGRST_DB_URI: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS:-public}
+      PGRST_DB_ANON_ROLE: ${PGRST_DB_ANON_ROLE:-anon}
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    depends_on:
+      - supabase-db
+    networks:
+      - stayfocus-network
+    profiles:
+      - supabase-local
+    restart: unless-stopped
+
+networks:
+  stayfocus-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
+  supabase_db_data:
+    driver: local

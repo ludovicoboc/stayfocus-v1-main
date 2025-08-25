@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 
 export type SelfKnowledgeCategory = "quem_sou" | "meus_porques" | "meus_padroes"
 

@@ -37,6 +37,11 @@ const nextConfig = {
     
     // Otimizações de runtime
     optimizeServerReact: true,
+    
+    // Fast refresh otimizado para desenvolvimento
+    ...(process.env.NODE_ENV === 'development' && {
+      fastRefresh: true
+    })
   },
   
   // 🖼️ OTIMIZAÇÃO DE IMAGENS PARA MOBILE
@@ -312,12 +317,6 @@ const nextConfig = {
     // Dev apenas
     reactStrictMode: true,
     // swcMinify: true, // Removido - configuração global
-    
-    // Fast refresh otimizado
-    experimental: {
-      ...nextConfig.experimental,
-      fastRefresh: true
-    }
   }),
   
   // 🎯 CONFIGURAÇÕES DE PRODUÇÃO

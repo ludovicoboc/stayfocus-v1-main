@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import type { PomodoroState, PomodoroConfig, SessaoPomodoro } from "@/types/estudos"
 
 export function usePomodoro(studySessionId?: string | null) {

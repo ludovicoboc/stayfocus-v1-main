@@ -21,7 +21,15 @@
     "sw:generate": "workbox generateSW workbox-config.js",
     "pwa:audit": "lighthouse http://localhost:3000 --chrome-flags='--headless' --output=html --output-path=./pwa-audit.html",
     "bundle:report": "npm run build && npm run analyze",
-    "performance:check": "npm run build && node scripts/performance-check.js"
+    "performance:check": "npm run build && node scripts/performance-check.js",
+    "docker:setup": "node -e \"console.log('Use: .\\\\docker-start.ps1 setup ou ./docker-start.sh setup')\";",
+    "docker:dev": "node -e \"console.log('Use: .\\\\docker-start.ps1 dev ou ./docker-start.sh dev')\";",
+    "docker:prod": "node -e \"console.log('Use: .\\\\docker-start.ps1 prod ou ./docker-start.sh prod')\";",
+    "docker:build": "docker-compose build",
+    "docker:stop": "docker-compose down",
+    "docker:clean": "docker-compose down -v --remove-orphans && docker system prune -f",
+    "docker:logs": "docker-compose logs -f",
+    "docker:health": "curl -f http://localhost:3000/api/health || echo 'Use: .\\\\docker-start.ps1 health'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

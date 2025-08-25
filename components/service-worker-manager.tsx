@@ -13,7 +13,7 @@ export function ServiceWorkerManager() {
   const [swState, setSwState] = useState<ServiceWorkerManager>({
     registration: null,
     updateAvailable: false,
-    isOnline: navigator?.onLine ?? true
+    isOnline: typeof window !== 'undefined' && typeof navigator !== 'undefined' ? navigator.onLine : true
   });
 
   useEffect(() => {
@@ -119,7 +119,12 @@ export function ServiceWorkerManager() {
 
 // Hook para usar o service worker em outros componentes
 export function useServiceWorker() {
-  const [isOnline, setIsOnline] = useState(navigator?.onLine ?? true);
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+      return navigator.onLine;
+    }
+    return true; // Assume online durante SSR
+  });
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);

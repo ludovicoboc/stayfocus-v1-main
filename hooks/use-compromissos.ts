@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { sanitizeString, sanitizeDate } from "@/utils/validations"
 import { getCurrentDateString } from "@/lib/utils"
 

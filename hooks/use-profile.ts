@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase"
-import { useAuth } from "./use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { getCurrentDateString } from "@/lib/utils"
 import type {
   UserPreferences,

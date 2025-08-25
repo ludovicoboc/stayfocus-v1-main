@@ -20,7 +20,7 @@ interface UseAuthOptions {
 
 // Utility para detectar mobile
 const isMobile = () => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
 };
 

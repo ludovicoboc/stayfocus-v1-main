@@ -6,7 +6,7 @@ import { useConcursos } from "@/hooks/use-concursos";
 import { competitionCache } from "@/lib/cache-manager";
 import { envValidator } from "@/lib/env-validator";
 import { competitionLogger } from "@/lib/error-handler";
-import { runCompetitionCRUDTests } from "@/tests/competition-crud.test";
+// import { runCompetitionCRUDTests } from "@/tests/competition-crud.test";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -149,28 +149,29 @@ export default function TestePage() {
     try {
       competitionLogger.info("Iniciando execução de testes CRUD");
 
-      // Executar testes diretamente no cliente
+      // Testes removidos para build de produção
       const startTime = Date.now();
-      const testData = await runCompetitionCRUDTests();
-      const executionTime = Date.now() - startTime;
-
       const data: TestResponse = {
-        success: testData.success,
-        message: testData.success
-          ? "✅ Todos os testes passaram!"
-          : "❌ Alguns testes falharam",
-        executionTime,
+        success: false,
+        message: "❌ Testes não disponíveis",
+        executionTime: Date.now() - startTime,
         testResults: {
-          summary: testData.summary,
-          suites: testData.results.map((suite) => ({
-            name: suite.suiteName,
-            totalTests: suite.results.length,
-            passed: suite.results.filter((r) => r.success).length,
-            failed: suite.results.filter((r) => !r.success).length,
-            details: showDetails
-              ? suite.results
-              : suite.results.filter((r) => !r.success),
-          })),
+          summary: { totalTests: 0, passed: 0, failed: 1, totalDuration: 0 },
+          suites: [
+            {
+              name: "Sistema",
+              totalTests: 1,
+              passed: 0,
+              failed: 1,
+              details: [
+                {
+                  success: false,
+                  message: "Funcionalidade de testes foi removida para produção",
+                  duration: 0
+                }
+              ]
+            }
+          ],
         },
         metadata: {
           userId: user.id,

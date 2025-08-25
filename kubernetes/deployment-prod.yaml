@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stayfocus-app
+  namespace: stayfocus
+  labels:
+    app: stayfocus-app
+    version: v1
+    environment: production
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: stayfocus-app
+  template:
+    metadata:
+      labels:
+        app: stayfocus-app
+        version: v1
+    spec:
+      containers:
+      - name: stayfocus-app
+        image: stayfocus-alimentacao:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        # Configurações do ConfigMap
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: NODE_ENV
+        - name: NEXT_TELEMETRY_DISABLED
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: NEXT_TELEMETRY_DISABLED
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: PORT
+        - name: HOSTNAME
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: HOSTNAME
+        - name: NEXT_PUBLIC_SITE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: NEXT_PUBLIC_SITE_URL
+        - name: NEXT_PUBLIC_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: NEXT_PUBLIC_API_URL
+        - name: NEXT_PUBLIC_PWA_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: NEXT_PUBLIC_PWA_ENABLED
+        - name: NEXT_PUBLIC_SW_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: NEXT_PUBLIC_SW_ENABLED
+        - name: NEXT_PUBLIC_DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: stayfocus-config
+              key: NEXT_PUBLIC_DEBUG
+        # Secrets do Supabase
+        - name: NEXT_PUBLIC_SUPABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: stayfocus-secrets
+              key: NEXT_PUBLIC_SUPABASE_URL
+        - name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+          valueFrom:
+            secretKeyRef:
+              name: stayfocus-secrets
+              key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        - name: NEXTAUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: stayfocus-secrets
+              key: NEXTAUTH_SECRET
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        # Resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      # Restart policy
+      restartPolicy: Always
+      # Security context for pod
+      securityContext:
+        fsGroup: 1001

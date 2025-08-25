@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import type { SessaoEstudo } from "@/types/estudos"
 import { validateSessaoEstudo, validateData, sanitizeString, sanitizeNumber } from "@/utils/validations"
 

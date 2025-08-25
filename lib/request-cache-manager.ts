@@ -37,13 +37,13 @@ interface RequestMetrics {
 
 // Utility para detectar mobile
 const isMobile = () => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
 };
 
 // Utility para detectar conexão lenta
 const isSlowConnection = () => {
-  if (typeof navigator === 'undefined' || !('connection' in navigator)) return false;
+  if (typeof navigator === 'undefined' || !navigator || !('connection' in navigator)) return false;
   const connection = (navigator as any).connection;
   return connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
 };

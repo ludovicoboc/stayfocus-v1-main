@@ -16,7 +16,7 @@ import type { User, Session } from "@supabase/supabase-js";
  * - Para: import { useAuth } from "@/lib/auth-provider"
  */
 export function useAuth() {
-  console.warn('⚠️ [USE-AUTH] Hook legado detectado. Migre para @/lib/auth-provider para melhor performance');
+  // Warning removido após migração completa dos hooks
   return useAuthContext();
 }
 

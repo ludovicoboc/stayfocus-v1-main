@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth-provider";
 import { createClient, withAuthenticatedSupabase, getCurrentAuthenticatedUser } from "@/lib/supabase";
 import { createDebouncedFunction, DEBOUNCE_CONFIGS } from "@/lib/request-debouncer";
 import { optimizedAuthCache } from "@/lib/auth-cache";

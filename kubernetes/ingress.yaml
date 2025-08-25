@@ -1,0 +1,87 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stayfocus-ingress
+  namespace: stayfocus
+  labels:
+    app: stayfocus-app
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    # Headers para PWA
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options SAMEORIGIN;
+      add_header X-Content-Type-Options nosniff;
+      add_header Referrer-Policy strict-origin-when-cross-origin;
+      add_header Permissions-Policy "camera=(), microphone=(), geolocation=()";
+      add_header X-UA-Compatible "IE=edge";
+spec:
+  tls:
+  - hosts:
+    - stayfocus.your-domain.com
+    secretName: stayfocus-tls
+  rules:
+  - host: stayfocus.your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: stayfocus-service
+            port:
+              number: 80
+      # Configurações específicas para PWA
+      - path: /sw.js
+        pathType: Exact
+        backend:
+          service:
+            name: stayfocus-service
+            port:
+              number: 80
+      - path: /manifest.webmanifest
+        pathType: Exact
+        backend:
+          service:
+            name: stayfocus-service
+            port:
+              number: 80
+      # API routes
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: stayfocus-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stayfocus-ingress-dev
+  namespace: stayfocus-dev
+  labels:
+    app: stayfocus-app-dev
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  rules:
+  - host: stayfocus-dev.your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: stayfocus-service-dev
+            port:
+              number: 80

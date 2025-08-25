@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createBrowserClient } from "@supabase/ssr";
-import { runCompetitionCRUDTests } from "@/tests/competition-crud.test";
+// import { runCompetitionCRUDTests } from "@/tests/competition-crud.test";
 import { validateAuthState } from "@/lib/auth-utils";
 import { competitionLogger } from "@/lib/error-handler";
 
@@ -103,50 +103,16 @@ export async function POST(request: NextRequest) {
       verbose,
     });
 
-    // Executar testes
-    const testResults = await runCompetitionCRUDTests();
-
-    const totalDuration = Date.now() - startTime;
-
-    // Log dos resultados
-    competitionLogger.info("Testes CRUD concluídos", {
-      userId: user.id,
-      totalDuration,
-      summary: testResults.summary,
-      success: testResults.success,
-    });
-
-    // Preparar resposta
-    const response = {
-      success: testResults.success,
-      message: testResults.success
-        ? "✅ Todos os testes passaram! Sistema funcionando corretamente."
-        : "❌ Alguns testes falharam. Verifique os detalhes.",
-      executionTime: totalDuration,
-      testResults: {
-        summary: testResults.summary,
-        suites: testResults.results.map((suite) => ({
-          name: suite.suiteName,
-          totalTests: suite.results.length,
-          passed: suite.results.filter((r) => r.success).length,
-          failed: suite.results.filter((r) => !r.success).length,
-          details: verbose
-            ? suite.results
-            : suite.results.filter((r) => !r.success), // Só erros se não verbose
-        })),
+    // Testes removidos para build de produção
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Testes de CRUD não estão disponíveis neste build",
+        message: "Funcionalidade de testes foi removida para produção",
+        code: "TESTS_DISABLED"
       },
-      metadata: {
-        userId: user.id,
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV,
-        version: "1.0.0",
-      },
-    };
-
-    // Status code baseado no resultado dos testes
-    const statusCode = testResults.success ? 200 : 400;
-
-    return NextResponse.json(response, { status: statusCode });
+      { status: 501 }
+    );
   } catch (error) {
     const totalDuration = Date.now() - startTime;
 

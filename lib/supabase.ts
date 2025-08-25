@@ -14,7 +14,7 @@ if (!supabaseAnonKey) {
 
 // Utility para detectar mobile
 const isMobile = () => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
 };
 
@@ -37,7 +37,7 @@ export function createClient() {
         "Accept-Encoding": "gzip, deflate, br",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
         "Cache-Control": "no-cache",
-        "User-Agent": typeof window !== 'undefined' ? navigator.userAgent : "stayfocus-server"
+        "User-Agent": typeof window !== 'undefined' && typeof navigator !== 'undefined' ? navigator.userAgent : "stayfocus-server"
       },
     },
     // Configurações otimizadas para mobile

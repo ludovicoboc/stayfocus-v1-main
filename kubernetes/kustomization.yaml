@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Recursos comuns
+resources:
+- namespace.yaml
+- configmap.yaml
+- secret.yaml
+- service.yaml
+- ingress.yaml
+
+# Produção
+- deployment-prod.yaml
+- hpa.yaml
+
+# Labels comuns
+commonLabels:
+  app.kubernetes.io/name: stayfocus-alimentacao
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/component: web-app
+  app.kubernetes.io/part-of: stayfocus-platform
+
+# Configurações específicas
+patchesStrategicMerge:
+- patches/production-patches.yaml
+
+# Transformações
+images:
+- name: stayfocus-alimentacao
+  newTag: latest
+
+# Configurações de namespace
+namespace: stayfocus

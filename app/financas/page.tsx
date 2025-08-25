@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { EnvelopesVirtuais } from "@/components/envelopes-virtuais"
 import { CalendarioPagamentos } from "@/components/calendario-pagamentos"
 import { AdicionarDespesa } from "@/components/adicionar-despesa"

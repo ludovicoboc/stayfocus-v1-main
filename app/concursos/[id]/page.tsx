@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth-provider";
 import { useConcursos } from "@/hooks/use-concursos";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -89,23 +89,27 @@ export default function ConcursoDetalhesPage() {
       return;
     }
 
-    try {      setLoading(true);
+    try {
+      setLoading(true);
       const data = await fetchConcursoCompleto(id);
 
       if (!data) {
         console.warn("⚠️ Concurso não encontrado ou não acessível");
         setConcurso(null);
 
-        // Buscar concursos disponíveis para sugerir        await loadConcursosDisponiveis();
+        // Buscar concursos disponíveis para sugerir
+        await loadConcursosDisponiveis();
         return;
-      }      setConcurso(data);
+      }
+      setConcurso(data);
 
       // Preselect first discipline if available
       if (
         data.disciplinas &&
         data.disciplinas.length > 0 &&
         data.disciplinas[0].id
-      ) {        setDisciplinaSelecionada(data.disciplinas[0].id);
+      ) {
+        setDisciplinaSelecionada(data.disciplinas[0].id);
       }
     } catch (error) {
       console.error("❌ Erro ao carregar concurso:", error);
@@ -118,7 +122,8 @@ export default function ConcursoDetalhesPage() {
 
   // Load available competitions for suggestions
   const loadConcursosDisponiveis = async () => {
-    try {      await fetchConcursos();
+    try {
+      await fetchConcursos();
       setConcursosDisponiveis(concursos.slice(0, 3)); // Show only first 3
     } catch (error) {
       console.error("❌ Erro ao carregar concursos disponíveis:", error);
@@ -139,7 +144,9 @@ export default function ConcursoDetalhesPage() {
       return;
     }
 
-    try {      const questoes = await buscarQuestoesConcurso(id);      setQuestoesConcurso(questoes);
+    try {
+      const questoes = await buscarQuestoesConcurso(id);
+      setQuestoesConcurso(questoes);
     } catch (error) {
       console.error("❌ Erro ao carregar questões:", error);
       setQuestoesConcurso([]);
@@ -147,8 +154,10 @@ export default function ConcursoDetalhesPage() {
   };
 
   // Effects
-  useEffect(() => {    // Aguardar a inicialização da autenticação
-    if (!initialized || authLoading) {      return;
+  useEffect(() => {
+    // Aguardar a inicialização da autenticação
+    if (!initialized || authLoading) {
+      return;
     }
 
     if (!user) {
@@ -157,13 +166,15 @@ export default function ConcursoDetalhesPage() {
       return;
     }
 
-    if (id && user) {      loadConcurso();
+    if (id && user) {
+      loadConcurso();
     }
   }, [user, id, initialized, authLoading]);
 
   useEffect(() => {
     // Carregar questões após o concurso ser carregado
-    if (concurso && user && id) {      loadQuestoes();
+    if (concurso && user && id) {
+      loadQuestoes();
     }
   }, [concurso, user, id]);
 

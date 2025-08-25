@@ -18,7 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/lib/auth-provider'
 import { supabase } from '@/lib/supabase'
 
 interface CriarQuestaoModalProps {

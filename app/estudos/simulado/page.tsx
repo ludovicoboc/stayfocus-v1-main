@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { useSimulados } from "@/hooks/use-simulados"
 import { SimuladoLoader } from "@/components/simulado-loader"
 import { SimuladoReview } from "@/components/simulado-review"

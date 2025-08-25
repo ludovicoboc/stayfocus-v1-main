@@ -19,11 +19,19 @@ export interface Prioridade {
 
 export interface Medicamento {
   id: string
+  user_id: string
   nome: string
-  horario?: string
-  tomado: boolean
+  dosagem: string
+  frequencia: string
+  intervalo_horas: number
+  horarios: string[]
+  data_inicio: string
+  data_fim?: string
+  observacoes?: string
   created_at: string
-  date: string
+  updated_at: string
+  tomado_hoje: boolean
+  proximo_horario?: string
 }
 
 export interface SessaoFocoDashboard {

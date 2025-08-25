@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
 import { LogIn, LogOut, User, Settings, Loader2 } from "lucide-react"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +25,8 @@ export function AuthenticationDropdown({ children }: AuthenticationDropdownProps
   const router = useRouter()
   const { toast } = useToast()
   const [isSigningOut, setIsSigningOut] = useState(false)
+
+  console.log('🔐 [AUTH-DROPDOWN] Usando contexto de autenticação compartilhado');
 
   const handleSignOut = async () => {
     setIsSigningOut(true)

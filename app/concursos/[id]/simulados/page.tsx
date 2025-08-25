@@ -25,7 +25,7 @@ import {
   Settings
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/lib/auth-provider'
 import { supabase } from '@/lib/supabase'
 import { CriarSimuladoModal } from '@/components/concursos/criar-simulado-modal'
 import { ImportarSimuladoJsonModal } from '@/components/concursos/importar-simulado-json-modal'

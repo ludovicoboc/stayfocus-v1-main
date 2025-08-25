@@ -143,11 +143,9 @@ export function useDashboardOptimized(date?: string, options: UseDashboardOption
       cacheKeys.medicamentos,
       async () => {
         const { data, error } = await supabase
-          .from("medicamentos")
+          .from("v_medicamentos_dashboard")
           .select("*")
-          .eq("user_id", user.id)
-          .eq("date", resolvedDate)
-          .order("horario", { ascending: true });
+          .order("created_at", { ascending: false });
 
         if (error) throw error;
         return data || [];
@@ -159,7 +157,7 @@ export function useDashboardOptimized(date?: string, options: UseDashboardOption
         timeout: isMobile() ? 8000 : 5000
       }
     );
-  }, [user, supabase, resolvedDate, cacheKeys.medicamentos]);
+  }, [user, supabase, cacheKeys.medicamentos]);
 
   const carregarSessaoFoco = useCallback(async () => {
     if (!user) return null;

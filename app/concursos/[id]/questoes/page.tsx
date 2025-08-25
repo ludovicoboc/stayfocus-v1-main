@@ -20,7 +20,7 @@ import {
   Star
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/lib/auth-provider'
 import { useQuestions, type Question } from '@/hooks/use-questions'
 import { supabase } from '@/lib/supabase'
 import { CriarQuestaoModal } from '@/components/concursos/criar-questao-modal'

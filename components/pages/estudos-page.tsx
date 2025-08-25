@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth-provider";
 import { TemporizadorPomodoro } from "@/components/temporizador-pomodoro";
 import { RegistroEstudos } from "@/components/registro-estudos";
 import { ProximoConcurso } from "@/components/proximo-concurso";

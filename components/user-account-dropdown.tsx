@@ -18,7 +18,7 @@ import {
   Calendar,
   BarChart3,
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +43,8 @@ export function UserAccountDropdown({ children }: UserAccountDropdownProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSigningOut, setIsSigningOut] = useState(false);
+
+  console.log('👤 [USER-DROPDOWN] Usando contexto de autenticação compartilhado');
 
   const handleSignOut = async () => {
     setIsSigningOut(true);

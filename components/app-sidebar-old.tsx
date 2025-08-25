@@ -3,7 +3,7 @@
 import React, { memo, useCallback, useMemo } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/lib/auth-provider"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Sidebar,

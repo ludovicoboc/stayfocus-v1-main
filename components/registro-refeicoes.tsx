@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { DateNavigation } from "@/components/ui/date-navigation";
 import { X, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth-provider";
 import { getCurrentDateString } from "@/lib/utils";
 
 interface MealRecord {

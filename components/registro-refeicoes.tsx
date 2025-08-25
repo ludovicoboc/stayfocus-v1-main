@@ -223,3 +223,6 @@ export function RegistroRefeicoes({ date }: { date?: string }) {
     </div>
   );
 }
+
+// Export default para lazy loading
+export default RegistroRefeicoes;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
+import { createDebouncedFunction, DEBOUNCE_CONFIGS } from "@/lib/request-debouncer"
 import { useAuth } from "./use-auth"
 import type {
   Medicamento,
@@ -57,20 +58,26 @@ export function useSaude(date?: string) {
     }
   }, [supabase, user, resolvedDate])
 
-  // Carregar medicamentos
+  // NOVA IMPLEMENTAÇÃO: Usar view dashboard otimizada para medicamentos
   const carregarMedicamentos = useCallback(async () => {
     if (!user) return
 
     setLoadingMedicamentos(true)
 
     try {
-      const { data, error } = await supabase.from("medicamentos").select("*").order("created_at", { ascending: false })
+      // Usar view dashboard que já inclui status de hoje e próximo horário
+      const { data, error } = await supabase
+        .from("v_medicamentos_dashboard")
+        .select("*")
+        .order("created_at", { ascending: false })
 
       if (error) throw error
 
       setMedicamentos(data || [])
       await carregarMedicamentosTomados()
-      calcularResumoMedicamentos(data || [])
+      
+      // Calcular resumo baseado nos dados otimizados da view
+      calcularResumoMedicamentosOtimizado(data || [])
     } catch (error) {
       console.error("Erro ao carregar medicamentos:", error)
     } finally {
@@ -173,8 +180,8 @@ export function useSaude(date?: string) {
     }
   }
 
-  // Marcar medicamento como tomado
-  const marcarMedicamentoTomado = async (novoMedicamentoTomado: NovoMedicamentoTomado) => {
+  // NOVA IMPLEMENTAÇÃO: Usar função otimizada marcar_medicamento_tomado
+  const marcarMedicamentoTomado = async (novoMedicamentoTomado: NovoMedicamentoTomado & { observacoes?: string }) => {
     if (!user) return null
 
     try {
@@ -204,21 +211,20 @@ export function useSaude(date?: string) {
         throw new Error("Horário deve ter formato HH:MM")
       }
 
-      const { data, error } = await supabase
-        .from("medicamentos_tomados")
-        .insert([
-          {
-            ...medicamentoTomadoSanitizado,
-            user_id: user.id,
-          },
-        ])
-        .select()
+      // Usar função otimizada do banco
+      const { data, error } = await supabase.rpc('marcar_medicamento_tomado', {
+        p_user_id: user.id,
+        p_medicamento_id: medicamentoTomadoSanitizado.medicamento_id,
+        p_data_tomada: medicamentoTomadoSanitizado.data_tomada,
+        p_horario_tomada: medicamentoTomadoSanitizado.horario_tomada,
+        p_observacoes: novoMedicamentoTomado.observacoes ? sanitizeString(novoMedicamentoTomado.observacoes) : null
+      })
 
       if (error) throw error
 
       await carregarMedicamentosTomados()
       await carregarMedicamentos() // Recarregar para atualizar resumo
-      return data?.[0] || null
+      return data // UUID do registro criado
     } catch (error) {
       console.error("Erro ao marcar medicamento como tomado:", error)
       return null
@@ -255,7 +261,50 @@ export function useSaude(date?: string) {
     }
   }
 
-  // Calcular resumo de medicamentos
+  // NOVA IMPLEMENTAÇÃO: Usar dados otimizados da view dashboard
+  const calcularResumoMedicamentosOtimizado = (medicamentos: any[]) => {
+    const total = medicamentos.length
+    
+    // A view já calcula automaticamente se foi tomado hoje
+    const tomadosHoje = medicamentos.filter(med => med.tomado_hoje).length
+
+    // A view já calcula o próximo horário automaticamente
+    let proximaDose: string | null = null
+    
+    // Encontrar o próximo horário mais próximo entre todos os medicamentos
+    const proximosHorarios = medicamentos
+      .map(med => med.proximo_horario)
+      .filter(horario => horario !== null)
+      .sort()
+    
+    if (proximosHorarios.length > 0) {
+      const proximoHorario = proximosHorarios[0]
+      const agora = new Date()
+      const [hora, minuto] = proximoHorario.split(':').map(Number)
+      
+      const dataProximaDose = new Date()
+      dataProximaDose.setHours(hora, minuto, 0, 0)
+      
+      // Se o horário já passou hoje, é para amanhã
+      if (dataProximaDose < agora) {
+        dataProximaDose.setDate(dataProximaDose.getDate() + 1)
+      }
+      
+      const diferencaMs = dataProximaDose.getTime() - agora.getTime()
+      const horas = Math.floor(diferencaMs / (1000 * 60 * 60))
+      const minutos = Math.floor((diferencaMs % (1000 * 60 * 60)) / (1000 * 60))
+      
+      proximaDose = `${horas}h ${minutos}m`
+    }
+
+    setResumoMedicamentos({
+      total,
+      tomadosHoje,
+      proximaDose,
+    })
+  }
+
+  // Fallback: Calcular resumo de medicamentos (implementação original)
   const calcularResumoMedicamentos = (medicamentos: Medicamento[]) => {
     const total = medicamentos.length
     
@@ -348,6 +397,27 @@ export function useSaude(date?: string) {
     return format(parseISO(data), "dd/MM/yyyy", { locale: ptBR })
   }
 
+  // NOVA FUNCIONALIDADE: Obter agenda de medicamentos otimizada
+  const obterAgendaMedicamentos = async (data?: string) => {
+    if (!user) return []
+    
+    try {
+      const targetDate = data || resolvedDate
+      
+      const { data: agenda, error } = await supabase.rpc('get_medicamento_agenda', {
+        p_user_id: user.id,
+        p_data: targetDate
+      })
+      
+      if (error) throw error
+      
+      return agenda || []
+    } catch (error) {
+      console.error("Erro ao obter agenda de medicamentos:", error)
+      return []
+    }
+  }
+
   // Efeito para carregar dados iniciais
   useEffect(() => {
     if (user) {
@@ -372,6 +442,7 @@ export function useSaude(date?: string) {
     carregarMedicamentos,
     carregarRegistrosHumor,
     carregarMedicamentosTomados,
+    obterAgendaMedicamentos, // Nova função otimizada
     formatarData,
     currentDate: resolvedDate,
   }

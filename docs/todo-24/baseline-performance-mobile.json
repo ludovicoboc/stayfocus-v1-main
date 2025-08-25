@@ -1,0 +1,413 @@
+{
+  "timestamp": "2025-08-24T21:50:50.988Z",
+  "environment": {
+    "nodeVersion": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "metrics": [
+    {
+      "category": "bundle-size",
+      "timestamp": 1756072251003,
+      "data": {
+        "dependencies": {
+          "production": 62,
+          "development": 12,
+          "total": 74,
+          "heavy_libs": [
+            {
+              "name": "@radix-ui/react-dialog",
+              "estimated_size": "~15KB"
+            },
+            {
+              "name": "@supabase/supabase-js",
+              "estimated_size": "~100KB"
+            },
+            {
+              "name": "date-fns",
+              "estimated_size": "~70KB"
+            },
+            {
+              "name": "lucide-react",
+              "estimated_size": "~150KB"
+            },
+            {
+              "name": "next",
+              "estimated_size": "~200KB"
+            },
+            {
+              "name": "react",
+              "estimated_size": "~42KB"
+            },
+            {
+              "name": "react-dom",
+              "estimated_size": "~130KB"
+            },
+            {
+              "name": "recharts",
+              "estimated_size": "~400KB"
+            }
+          ]
+        },
+        "estimated_bundle_size": {
+          "total": "1691KB",
+          "breakdown": {
+            "@hookform/resolvers": 10000,
+            "@next/bundle-analyzer": 10000,
+            "@next/swc-linux-x64-gnu": 10000,
+            "@next/swc-wasm-nodejs": 10000,
+            "@playwright/test": 10000,
+            "@radix-ui/react-accordion": 10000,
+            "@radix-ui/react-alert-dialog": 10000,
+            "@radix-ui/react-aspect-ratio": 10000,
+            "@radix-ui/react-avatar": 10000,
+            "@radix-ui/react-checkbox": 10000,
+            "@radix-ui/react-collapsible": 10000,
+            "@radix-ui/react-context-menu": 10000,
+            "@radix-ui/react-dialog": 15000,
+            "@radix-ui/react-dropdown-menu": 15000,
+            "@radix-ui/react-hover-card": 10000,
+            "@radix-ui/react-label": 10000,
+            "@radix-ui/react-menubar": 10000,
+            "@radix-ui/react-navigation-menu": 10000,
+            "@radix-ui/react-popover": 10000,
+            "@radix-ui/react-progress": 10000,
+            "@radix-ui/react-radio-group": 10000,
+            "@radix-ui/react-scroll-area": 10000,
+            "@radix-ui/react-select": 10000,
+            "@radix-ui/react-separator": 10000,
+            "@radix-ui/react-slider": 10000,
+            "@radix-ui/react-slot": 10000,
+            "@radix-ui/react-switch": 10000,
+            "@radix-ui/react-tabs": 10000,
+            "@radix-ui/react-toast": 10000,
+            "@radix-ui/react-toggle": 10000,
+            "@radix-ui/react-toggle-group": 10000,
+            "@radix-ui/react-tooltip": 10000,
+            "@supabase/auth-helpers-nextjs": 10000,
+            "@supabase/ssr": 10000,
+            "@supabase/supabase-js": 100000,
+            "autoprefixer": 10000,
+            "class-variance-authority": 10000,
+            "clsx": 10000,
+            "cmdk": 10000,
+            "date-fns": 70000,
+            "embla-carousel-react": 10000,
+            "geist": 10000,
+            "input-otp": 10000,
+            "lucide-react": 150000,
+            "next": 200000,
+            "next-pwa": 10000,
+            "next-themes": 10000,
+            "react": 42000,
+            "react-day-picker": 10000,
+            "react-dom": 130000,
+            "react-hook-form": 40000,
+            "react-resizable-panels": 10000,
+            "recharts": 400000,
+            "sonner": 20000,
+            "tailwind-merge": 10000,
+            "tailwindcss-animate": 10000,
+            "vaul": 10000,
+            "workbox-precaching": 10000,
+            "workbox-routing": 10000,
+            "workbox-strategies": 10000,
+            "workbox-webpack-plugin": 10000,
+            "zod": 50000
+          },
+          "mobile_concern": true
+        }
+      }
+    },
+    {
+      "category": "dependencies",
+      "timestamp": 1756072251006,
+      "data": {
+        "lock_file": true,
+        "package_manager": "pnpm",
+        "node_modules_size": 845168174
+      }
+    },
+    {
+      "category": "data-hooks",
+      "timestamp": 1756072254669,
+      "data": {
+        "hooks_found": [
+          {
+            "name": "use-auth-optimized.ts",
+            "has_cache": false,
+            "mobile_optimized": true,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 5,
+            "supabase_calls": 10,
+            "issues": [
+              "Muitas chamadas Supabase sem cache",
+              "Muitos useEffect - possível re-renders"
+            ]
+          },
+          {
+            "name": "use-auth.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 7,
+            "issues": [
+              "Muitas chamadas Supabase sem cache",
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-compromissos.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 0,
+            "issues": []
+          },
+          {
+            "name": "use-concursos.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 3,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-dashboard-optimized.ts",
+            "has_cache": true,
+            "mobile_optimized": true,
+            "has_debounce": true,
+            "parallel_requests": 2,
+            "useEffect_count": 3,
+            "supabase_calls": 2,
+            "issues": []
+          },
+          {
+            "name": "use-dashboard.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 1,
+            "useEffect_count": 2,
+            "supabase_calls": 2,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-estudos.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 1,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-financas.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 1,
+            "useEffect_count": 2,
+            "supabase_calls": 0,
+            "issues": []
+          },
+          {
+            "name": "use-hiperfocos.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 1,
+            "useEffect_count": 2,
+            "supabase_calls": 2,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-lazer.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 2,
+            "useEffect_count": 2,
+            "supabase_calls": 5,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-pomodoro.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 3,
+            "supabase_calls": 0,
+            "issues": []
+          },
+          {
+            "name": "use-profile.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 3,
+            "supabase_calls": 0,
+            "issues": []
+          },
+          {
+            "name": "use-questions.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 2,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-receitas.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 1,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-saude.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 4,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-self-knowledge.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 1,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-simulados.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 1,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-simulations.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": true,
+            "parallel_requests": 0,
+            "useEffect_count": 2,
+            "supabase_calls": 2,
+            "issues": [
+              "Sem otimizações específicas para mobile"
+            ]
+          },
+          {
+            "name": "use-sono.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 0,
+            "useEffect_count": 3,
+            "supabase_calls": 0,
+            "issues": []
+          },
+          {
+            "name": "use-toast.ts",
+            "has_cache": false,
+            "mobile_optimized": false,
+            "has_debounce": false,
+            "parallel_requests": 0,
+            "useEffect_count": 1,
+            "supabase_calls": 0,
+            "issues": []
+          }
+        ],
+        "optimization_status": {},
+        "cache_usage": {},
+        "mobile_optimizations": {},
+        "summary": {
+          "total_hooks": 20,
+          "optimized_hooks": 2,
+          "optimization_rate": 10
+        }
+      }
+    },
+    {
+      "category": "cache-status",
+      "timestamp": 1756072254677,
+      "data": {
+        "cache_implementations": [
+          "auth-cache",
+          "request-cache",
+          "service-worker",
+          "middleware-cache"
+        ],
+        "auth_cache": true,
+        "request_cache": true,
+        "service_worker": true,
+        "browser_cache": false,
+        "middleware_cache": true
+      }
+    }
+  ],
+  "summary": {
+    "overall_score": 50,
+    "scores": {
+      "hooks_optimization": 10,
+      "cache_implementation": 100,
+      "bundle_efficiency": 30
+    },
+    "recommendations": [
+      {
+        "priority": "ALTA",
+        "action": "Otimizar hooks para mobile com TTL diferenciado",
+        "impact": "Médio - Melhoria de 30-50% em performance mobile"
+      },
+      {
+        "priority": "ALTA",
+        "action": "Implementar code splitting e lazy loading",
+        "impact": "Alto - Redução significativa no tempo de carregamento inicial"
+      }
+    ]
+  }
+}

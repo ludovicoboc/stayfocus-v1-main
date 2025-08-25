@@ -1,143 +1,118 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase";
+import { useAuthOptimized } from "@/hooks/use-auth-optimized";
 import type { User, Session } from "@supabase/supabase-js";
 
+/**
+ * Hook de autenticação compatível com a versão anterior
+ * Agora usa internamente o sistema otimizado com cache e debouncing
+ */
 export function useAuth() {
+  // Usar versão otimizada internamente
+  const optimizedAuth = useAuthOptimized({
+    enableCache: true,
+    debounceTime: 300,
+    enableBackgroundRefresh: true
+  });
+
+  // Manter compatibilidade com interface anterior
+  return {
+    user: optimizedAuth.user,
+    session: optimizedAuth.session,
+    loading: optimizedAuth.loading,
+    initialized: optimizedAuth.initialized,
+    signIn: optimizedAuth.signIn,
+    signUp: optimizedAuth.signUp,
+    signOut: optimizedAuth.signOut,
+    // Adicionar função de compatibilidade
+    getCurrentSession: optimizedAuth.getCurrentSession
+  };
+}
+
+// === IMPLEMENTAÇÃO ANTERIOR (MANTIDA PARA REFERÊNCIA) ===
+// Esta implementação foi substituída pela versão otimizada
+// mas mantida comentada para referência e rollback se necessário
+
+/*
+function useAuthLegacy() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  
   const supabase = createClient();
 
+  // Função simples para obter sessão atual
+  const getCurrentSession = useCallback(async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        return { user: null, session: null };
+      }
+
+      return { 
+        user: session?.user || null, 
+        session: session || null 
+      };
+    } catch (error) {
+      console.error("❌ [USE-AUTH-LEGACY] Erro na obtenção de sessão:", error);
+      return { user: null, session: null };
+    }
+  }, [supabase.auth]);
+
+  // Inicialização simples
   useEffect(() => {
     let mounted = true;
 
-    // Função para verificar usuário atual
-    const getUser = async () => {
+    const initAuth = async () => {
       try {
-        console.log("🔐 Verificando estado de autenticação...");
-
-        // Primeiro, tentar obter a sessão atual
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error("❌ Erro ao obter sessão:", sessionError);
-          if (mounted) {
-            setUser(null);
-            setSession(null);
-            setLoading(false);
-            setInitialized(true);
-          }
-          return;
-        }
-
-        if (session?.user) {
-          console.log("✅ Sessão válida encontrada:", {
-            userId: session.user.id,
-            email: session.user.email,
-            expiresAt: new Date(session.expires_at! * 1000).toISOString(),
-          });
-
-          if (mounted) {
-            setUser(session.user);
-            setSession(session);
-          }
-        } else {
-          console.log("ℹ️ Nenhuma sessão ativa encontrada");
-          if (mounted) {
-            setUser(null);
-            setSession(null);
-          }
-        }
-
-        // Verificar se o token ainda é válido fazendo uma chamada de teste
-        if (session?.user) {
-          try {
-            const { data, error } = await supabase.auth.getUser();
-            if (error) {
-              console.warn("⚠️ Token inválido ou expirado:", error.message);
-              if (mounted) {
-                setUser(null);
-                setSession(null);
-              }
-            } else if (data.user) {
-              console.log("✅ Token validado com sucesso");
-              if (mounted) {
-                setUser(data.user);
-              }
-            }
-          } catch (tokenError) {
-            console.error("❌ Erro ao validar token:", tokenError);
-            if (mounted) {
-              setUser(null);
-              setSession(null);
-            }
-          }
+        const { user: currentUser, session: currentSession } = await getCurrentSession();
+        
+        if (mounted) {
+          setUser(currentUser);
+          setSession(currentSession);
+          setLoading(false);
+          setInitialized(true);
         }
       } catch (error) {
-        console.error("❌ Erro geral ao verificar usuário:", error);
+        console.error("❌ [USE-AUTH-LEGACY] Erro na inicialização:", error);
         if (mounted) {
           setUser(null);
           setSession(null);
-        }
-      } finally {
-        if (mounted) {
           setLoading(false);
           setInitialized(true);
         }
       }
     };
 
-    getUser();
-
-    // Escutar mudanças de autenticação
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔄 Mudança de estado de autenticação:", event, {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        email: session?.user?.email,
-      });
-
-      if (mounted) {
-        setUser(session?.user ?? null);
-        setSession(session);
-        setLoading(false);
-        setInitialized(true);
-      }
-
-      // Log específico para diferentes eventos
-      switch (event) {
-        case "SIGNED_IN":
-          console.log("✅ Usuário logado com sucesso");
-          break;
-        case "SIGNED_OUT":
-          console.log("👋 Usuário deslogado");
-          break;
-        case "TOKEN_REFRESHED":
-          console.log("🔄 Token renovado automaticamente");
-          break;
-        case "PASSWORD_RECOVERY":
-          console.log("🔑 Processo de recuperação de senha iniciado");
-          break;
-      }
-    });
+    initAuth();
 
     return () => {
       mounted = false;
+    };
+  }, [getCurrentSession]);
+
+  // Listener para mudanças de autenticação
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user || null);
+        setSession(session || null);
+        
+        if (!loading) {
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => {
       subscription.unsubscribe();
     };
-  }, [supabase.auth]);
+  }, [supabase.auth, loading]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log("🔐 Tentando fazer login para:", email);
       setLoading(true);
 
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -146,18 +121,12 @@ export function useAuth() {
       });
 
       if (error) {
-        console.error("❌ Erro no login:", error.message);
+        console.error("❌ [USE-AUTH-LEGACY] Erro no login:", error.message);
         throw error;
       }
-
-      console.log("✅ Login realizado com sucesso:", {
-        userId: data.user?.id,
-        email: data.user?.email,
-      });
-
-      return data;
+      return { user: data.user, session: data.session };
     } catch (error) {
-      console.error("❌ Erro ao fazer login:", error);
+      console.error("❌ [USE-AUTH-LEGACY] Erro no signIn:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -166,7 +135,6 @@ export function useAuth() {
 
   const signUp = async (email: string, password: string) => {
     try {
-      console.log("📝 Tentando criar conta para:", email);
       setLoading(true);
 
       const { data, error } = await supabase.auth.signUp({
@@ -175,19 +143,12 @@ export function useAuth() {
       });
 
       if (error) {
-        console.error("❌ Erro na criação de conta:", error.message);
+        console.error("❌ [USE-AUTH-LEGACY] Erro no registro:", error.message);
         throw error;
       }
-
-      console.log("✅ Conta criada com sucesso:", {
-        userId: data.user?.id,
-        email: data.user?.email,
-        needsConfirmation: !data.session,
-      });
-
-      return data;
+      return { user: data.user, session: data.session };
     } catch (error) {
-      console.error("❌ Erro ao criar conta:", error);
+      console.error("❌ [USE-AUTH-LEGACY] Erro no signUp:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -196,41 +157,21 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      console.log("👋 Fazendo logout...");
       setLoading(true);
 
       const { error } = await supabase.auth.signOut();
+
       if (error) {
-        console.error("❌ Erro no logout:", error.message);
+        console.error("❌ [USE-AUTH-LEGACY] Erro no logout:", error.message);
         throw error;
       }
-
-      console.log("✅ Logout realizado com sucesso");
       setUser(null);
       setSession(null);
     } catch (error) {
-      console.error("❌ Erro ao fazer logout:", error);
+      console.error("❌ [USE-AUTH-LEGACY] Erro no signOut:", error);
       throw error;
     } finally {
       setLoading(false);
-    }
-  };
-
-  const refreshSession = async () => {
-    try {
-      console.log("🔄 Renovando sessão...");
-      const { data, error } = await supabase.auth.refreshSession();
-
-      if (error) {
-        console.error("❌ Erro ao renovar sessão:", error.message);
-        throw error;
-      }
-
-      console.log("✅ Sessão renovada com sucesso");
-      return data;
-    } catch (error) {
-      console.error("❌ Erro ao renovar sessão:", error);
-      throw error;
     }
   };
 
@@ -242,7 +183,7 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    refreshSession,
-    isAuthenticated: !!user && !!session,
+    getCurrentSession,
   };
 }
+*/

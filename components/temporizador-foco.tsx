@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Play, Pause, Square, Clock, Volume2 } from "lucide-react"
+import { Play, Pause, Square, Clock, Volume2, VolumeX } from "lucide-react"
 import { useHiperfocos } from "@/hooks/use-hiperfocos"
+import { toast } from "sonner"
 
 export function TemporizadorFoco() {
   const { projects, createSession } = useHiperfocos()
@@ -63,44 +64,55 @@ export function TemporizadorFoco() {
       try {
         await audioRef.current.play()
       } catch (error) {
-        console.log("Could not play alarm sound:", error)
+        // Audio play failed, show notification instead
+        toast.success("Sessão de foco concluída! 🎉")
       }
     }
 
-    // Save session to database
+    // Save session if project selected and duration > 5 minutes
     if (selectedProject && sessionStartTime) {
-      const durationMinutes = Math.round((Date.now() - sessionStartTime.getTime()) / (1000 * 60))
-      await createSession({
-        project_id: selectedProject,
-        duration_minutes: durationMinutes,
-        completed: true,
-        completed_at: new Date().toISOString(),
-      })
+      const durationMinutes = parseInt(customTime)
+      if (durationMinutes >= 5) {
+        try {
+          await createSession({
+            project_id: selectedProject,
+            duration_minutes: durationMinutes,
+            completed: true,
+            started_at: sessionStartTime.toISOString(),
+            completed_at: new Date().toISOString()
+          })
+          toast.success("Sessão salva com sucesso!")
+        } catch (error) {
+          toast.error("Erro ao salvar sessão")
+        }
+      }
     }
 
-    alert("Tempo de foco concluído! 🎉")
+    setSessionStartTime(null)
+    toast.success("Sessão de foco concluída! 🎉")
   }
 
-  const handleStart = () => {
-    if (!selectedProject || (!timeLeft && !customTime)) return
-
-    if (!isRunning && !isPaused) {
-      // Starting new session
-      const minutes = Number.parseInt(customTime)
+  const startTimer = () => {
+    const minutes = parseInt(customTime)
+    if (minutes > 0) {
       setTimeLeft(minutes * 60)
+      setIsRunning(true)
+      setIsPaused(false)
       setSessionStartTime(new Date())
     }
-
-    setIsRunning(true)
-    setIsPaused(false)
   }
 
-  const handlePause = () => {
+  const pauseTimer = () => {
     setIsRunning(false)
     setIsPaused(true)
   }
 
-  const handleStop = () => {
+  const resumeTimer = () => {
+    setIsRunning(true)
+    setIsPaused(false)
+  }
+
+  const stopTimer = () => {
     setIsRunning(false)
     setIsPaused(false)
     setTimeLeft(0)
@@ -110,164 +122,153 @@ export function TemporizadorFoco() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const getProgress = () => {
-    if (!customTime) return 0
-    const totalSeconds = Number.parseInt(customTime) * 60
-    const elapsedSeconds = totalSeconds - timeLeft
-    return totalSeconds > 0 ? (elapsedSeconds / totalSeconds) * 100 : 0
-  }
-
-  const selectedProjectData = projects.find((p) => p.id === selectedProject)
+  const presetTimes = [
+    { label: "15 min", value: "15" },
+    { label: "25 min", value: "25" },
+    { label: "30 min", value: "30" },
+    { label: "45 min", value: "45" },
+    { label: "60 min", value: "60" },
+  ]
 
   return (
-    <Card className="bg-slate-800 border-slate-700">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-white flex items-center">
-          <Clock className="w-5 h-5 mr-2 text-purple-400" />
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
           Temporizador de Foco
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Controls */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="project-select" className="text-slate-300">
-                Hiperfoco para temporizador
-              </Label>
-              <Select value={selectedProject} onValueChange={setSelectedProject}>
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                  <SelectValue placeholder="Selecione um hiperfoco" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-700 border-slate-600 text-white">
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id!}>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: project.color }} />
-                        <span>{project.title}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <CardContent className="space-y-6">
+        {/* Project Selection */}
+        <div className="space-y-2">
+          <Label htmlFor="project-select">Projeto (opcional)</Label>
+          <Select 
+            value={selectedProject} 
+            onValueChange={setSelectedProject}
+            disabled={isRunning}
+          >
+            <SelectTrigger id="project-select">
+              <SelectValue placeholder="Selecione um projeto" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id || ''}>
+                  {project.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-            <div>
-              <Label htmlFor="custom-time" className="text-slate-300">
-                Tempo personalizado (minutos)
-              </Label>
-              <div className="flex space-x-2">
-                <Input
-                  id="custom-time"
-                  type="number"
-                  value={customTime}
-                  onChange={(e) => setCustomTime(e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white flex-1"
-                  min="1"
-                  max="180"
-                  placeholder="Ex: 30"
-                />
-                <Button
-                  onClick={() => setCustomTime("30")}
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                >
-                  Definir
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="sound-alarm"
-                checked={soundEnabled}
-                onChange={(e) => setSoundEnabled(e.target.checked)}
-                className="rounded"
-              />
-              <Label htmlFor="sound-alarm" className="text-slate-300 flex items-center">
-                <Volume2 className="w-4 h-4 mr-1" />
-                Som de alarme
-              </Label>
-            </div>
-          </div>
-
-          {/* Timer Display */}
-          <div className="flex flex-col items-center justify-center space-y-4">
-            <div className="relative w-32 h-32">
-              <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="45"
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="none"
-                  className="text-slate-700"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="45"
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={`${2 * Math.PI * 45}`}
-                  strokeDashoffset={`${2 * Math.PI * 45 * (1 - getProgress() / 100)}`}
-                  className="text-purple-400 transition-all duration-1000"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold text-white">{formatTime(timeLeft)}</span>
-              </div>
-            </div>
-
-            <div className="flex space-x-2">
-              {!isRunning ? (
-                <Button
-                  onClick={handleStart}
-                  disabled={!selectedProject || (!timeLeft && !customTime)}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <Play className="w-4 h-4 mr-1" />
-                  {isPaused ? "Continuar" : "Iniciar"}
-                </Button>
-              ) : (
-                <Button onClick={handlePause} className="bg-yellow-600 hover:bg-yellow-700">
-                  <Pause className="w-4 h-4 mr-1" />
-                  Pausar
-                </Button>
-              )}
-
-              <Button onClick={handleStop} disabled={!isRunning && !isPaused} variant="destructive">
-                <Square className="w-4 h-4 mr-1" />
-                Parar
+        {/* Time Selection */}
+        <div className="space-y-4">
+          <Label>Duração</Label>
+          
+          {/* Preset Buttons */}
+          <div className="grid grid-cols-5 gap-2">
+            {presetTimes.map((preset) => (
+              <Button
+                key={preset.value}
+                variant={customTime === preset.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCustomTime(preset.value)}
+                disabled={isRunning}
+                className="text-xs"
+              >
+                {preset.label}
               </Button>
-            </div>
+            ))}
+          </div>
 
-            <div className="text-center text-slate-400 text-sm">
-              {isRunning ? "Temporizador rodando" : isPaused ? "Temporizador pausado" : "Temporizador parado"}
-            </div>
+          {/* Custom Time Input */}
+          <div className="flex items-center gap-2">
+            <Label htmlFor="custom-time" className="whitespace-nowrap">
+              Personalizado:
+            </Label>
+            <Input
+              id="custom-time"
+              type="number"
+              value={customTime}
+              onChange={(e) => setCustomTime(e.target.value)}
+              disabled={isRunning}
+              min="1"
+              max="180"
+              className="w-20"
+            />
+            <span className="text-sm text-muted-foreground">minutos</span>
           </div>
         </div>
 
-        {/* Tips */}
-        <div className="mt-6 p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
-          <div className="flex items-start space-x-2">
-            <div className="text-blue-400 text-sm">💡</div>
-            <div className="text-blue-300 text-sm">
-              <strong>Dica para gerenciar o tempo:</strong>
-              <br />
-              Utilizar temporizadores ajuda a manter o foco e evitar o hiperfoco prolongado. Defina intervalos de
-              trabalho e pausas regulares para melhorar a produtividade.
-            </div>
+        {/* Timer Display */}
+        <div className="text-center">
+          <div className="text-6xl font-mono font-bold mb-4">
+            {timeLeft > 0 ? formatTime(timeLeft) : "00:00"}
           </div>
+          
+          {timeLeft > 0 && (
+            <div className="w-full bg-secondary rounded-full h-2 mb-4">
+              <div 
+                className="bg-primary h-2 rounded-full transition-all duration-1000"
+                style={{ 
+                  width: `${((parseInt(customTime) * 60 - timeLeft) / (parseInt(customTime) * 60)) * 100}%` 
+                }}
+              />
+            </div>
+          )}
         </div>
+
+        {/* Controls */}
+        <div className="flex justify-center gap-2">
+          {!isRunning && !isPaused && (
+            <Button onClick={startTimer} disabled={parseInt(customTime) <= 0}>
+              <Play className="h-4 w-4 mr-2" />
+              Iniciar
+            </Button>
+          )}
+          
+          {isRunning && (
+            <Button onClick={pauseTimer} variant="secondary">
+              <Pause className="h-4 w-4 mr-2" />
+              Pausar
+            </Button>
+          )}
+          
+          {isPaused && (
+            <Button onClick={resumeTimer}>
+              <Play className="h-4 w-4 mr-2" />
+              Continuar
+            </Button>
+          )}
+          
+          {(isRunning || isPaused) && (
+            <Button onClick={stopTimer} variant="destructive">
+              <Square className="h-4 w-4 mr-2" />
+              Parar
+            </Button>
+          )}
+          
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+          >
+            {soundEnabled ? (
+              <Volume2 className="h-4 w-4" />
+            ) : (
+              <VolumeX className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+
+        {/* Status */}
+        {sessionStartTime && (
+          <div className="text-center text-sm text-muted-foreground">
+            Sessão iniciada às {sessionStartTime.toLocaleTimeString()}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

@@ -35,6 +35,9 @@ interface UserAccountDropdownProps {
   children: React.ReactNode;
 }
 
+// Export default para lazy loading
+export default UserAccountDropdown;
+
 export function UserAccountDropdown({ children }: UserAccountDropdownProps) {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();

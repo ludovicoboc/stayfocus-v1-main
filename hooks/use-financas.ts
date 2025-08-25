@@ -66,9 +66,6 @@ export function useFinancas() {
 
       // Se não há categorias, criar as categorias padrão
       if (!data || data.length === 0) {
-        console.log(
-          "Nenhuma categoria encontrada. Criando categorias padrão...",
-        );
         const success = await criarCategoriasDefault(supabase, user.id);
 
         if (success) {

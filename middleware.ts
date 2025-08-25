@@ -1,7 +1,27 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { optimizedAuthCache } from "./lib/auth-cache";
+
+// Cache para verificações de rota (reduzir overhead)
+const routeVerificationCache = new Map<string, { isProtected: boolean; timestamp: number }>();
+const ROUTE_CACHE_TTL = 60 * 1000; // 1 minuto
+
+// Otimização: detectar mobile para ajustar timeouts
+function isMobileRequest(userAgent: string): boolean {
+  return /Mobi|Android|iPhone|iPad/i.test(userAgent);
+}
 
 export async function middleware(request: NextRequest) {
+  // Limpeza periódica do cache de rotas (Edge Runtime compatible)
+  const now = Date.now();
+  if (routeVerificationCache.size > 100) {
+    for (const [key, value] of routeVerificationCache.entries()) {
+      if ((now - value.timestamp) > (5 * ROUTE_CACHE_TTL)) {
+        routeVerificationCache.delete(key);
+      }
+    }
+  }
+
   // Criar resposta inicial
   let response = NextResponse.next({
     request: {
@@ -12,253 +32,250 @@ export async function middleware(request: NextRequest) {
   const startTime = Date.now();
   const pathname = request.nextUrl.pathname;
   const userAgent = request.headers.get("user-agent") || "unknown";
+  const isMobile = isMobileRequest(userAgent);
 
   console.log(
-    `🔐 [MIDDLEWARE] Processando: ${pathname} | UA: ${userAgent.substring(0, 50)}`,
+    `🔐 [MIDDLEWARE-OPTIMIZED] Processando: ${pathname} | Mobile: ${isMobile} | UA: ${userAgent.substring(0, 30)}`
   );
 
   try {
-    // Configurar cliente Supabase com configuração otimizada
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            const value = request.cookies.get(name)?.value;
-            if (value && name.includes("auth")) {
-              console.log(`🍪 [MIDDLEWARE] Cookie auth encontrado: ${name}`);
-            }
-            return value;
-          },
-          set(name: string, value: string, options: any) {
-            request.cookies.set({
-              name,
-              value,
-              ...options,
-            });
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            });
-            response.cookies.set({
-              name,
-              value,
-              ...options,
-            });
-            if (name.includes("auth")) {
-              console.log(`🍪 [MIDDLEWARE] Cookie auth definido: ${name}`);
-            }
-          },
-          remove(name: string, options: any) {
-            request.cookies.set({
-              name,
-              value: "",
-              ...options,
-            });
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            });
-            response.cookies.set({
-              name,
-              value: "",
-              ...options,
-            });
-            if (name.includes("auth")) {
-              console.log(`🍪 [MIDDLEWARE] Cookie auth removido: ${name}`);
-            }
-          },
-        },
-        auth: {
-          persistSession: true,
-          autoRefreshToken: false, // Evitar conflitos no server-side
-        },
-      },
-    );
-
-    // Verificar se há cookies de autenticação presentes
-    const authCookies = request.cookies
-      .getAll()
-      .filter(
-        (cookie) =>
-          cookie.name.includes("auth") || cookie.name.includes("supabase"),
+    // === OTIMIZAÇÃO 1: Cache de classificação de rotas ===
+    const routeCacheKey = pathname;
+    const cachedRoute = routeVerificationCache.get(routeCacheKey);
+    
+    let isProtectedRoute = false;
+    let isPublicRoute = false;
+    
+    if (cachedRoute && (Date.now() - cachedRoute.timestamp) < ROUTE_CACHE_TTL) {
+      // Usar cache de rota
+      isProtectedRoute = cachedRoute.isProtected;
+      isPublicRoute = !cachedRoute.isProtected;
+      console.log(`⚡ [MIDDLEWARE-OPTIMIZED] Cache hit para rota: ${pathname}`);
+    } else {
+      // Classificar rota e cachear resultado
+      const protectedRoutes = [
+        "/concursos",
+        "/estudos",
+        "/alimentacao", 
+        "/autoconhecimento",
+        "/financas",
+        "/hiperfocos",
+        "/lazer",
+        "/perfil",
+        "/receitas",
+        "/roadmap",
+        "/saude",
+        "/sono",
+      ];
+      
+      const publicRoutes = ["/auth", "/", "/api/health"];
+      
+      isPublicRoute = publicRoutes.some(
+        (route) => pathname === route || pathname.startsWith(route)
       );
+      
+      isProtectedRoute = protectedRoutes.some((route) =>
+        pathname.startsWith(route)
+      );
+      
+      // Cachear classificação da rota
+      routeVerificationCache.set(routeCacheKey, {
+        isProtected: isProtectedRoute,
+        timestamp: Date.now()
+      });
+    }
 
     console.log(
-      `🍪 [MIDDLEWARE] Cookies de auth encontrados: ${authCookies.length}`,
+      `🛡️ [MIDDLEWARE-OPTIMIZED] Rota: ${pathname} | Protegida: ${isProtectedRoute} | Pública: ${isPublicRoute} | Mobile: ${isMobile}`
     );
 
-    // Rotas que precisam de autenticação
-    const protectedRoutes = [
-      "/concursos",
-      "/estudos",
-      "/alimentacao",
-      "/autoconhecimento",
-      "/financas",
-      "/hiperfocos",
-      "/lazer",
-      "/perfil",
-      "/receitas",
-      "/roadmap",
-      "/saude",
-      "/sono",
-    ];
-
-    // Rotas que devem pular verificação de autenticação
-    const publicRoutes = ["/auth", "/", "/api/health"];
-
-    // Verificar se é uma rota pública
-    const isPublicRoute = publicRoutes.some(
-      (route) => pathname === route || pathname.startsWith(route),
-    );
-
-    // Verificar se é uma rota protegida (incluindo rotas dinâmicas)
-    const isProtectedRoute = protectedRoutes.some((route) =>
-      pathname.startsWith(route),
-    );
-
-    console.log(
-      `🛡️ [MIDDLEWARE] Rota: ${pathname} | Protegida: ${isProtectedRoute} | Pública: ${isPublicRoute}`,
-    );
-
-    // Se for rota pública, permitir acesso sem verificação
+    // === OTIMIZAÇÃO 2: Saída rápida para rotas públicas ===
     if (isPublicRoute) {
-      console.log(`✅ [MIDDLEWARE] Rota pública, acesso liberado: ${pathname}`);
+      console.log(`✅ [MIDDLEWARE-OPTIMIZED] Rota pública, acesso liberado: ${pathname}`);
       return addSecurityHeaders(response, startTime, pathname);
     }
 
-    // Se for rota protegida, verificar autenticação
+    // === OTIMIZAÇÃO 3: Verificação de auth com cache inteligente ===
     if (isProtectedRoute) {
       console.log(
-        `🔒 [MIDDLEWARE] Verificando autenticação para rota protegida: ${pathname}`,
+        `🔒 [MIDDLEWARE-OPTIMIZED] Verificando autenticação para rota protegida: ${pathname}`
       );
 
-      // Verificação de sessão com retry
-      let session = null;
-      let sessionError = null;
+      let isAuthenticated = false;
+      let cachedAuth = null;
 
+      // Primeiro: tentar cache otimizado
       try {
-        const { data, error } = await supabase.auth.getSession();
-        session = data.session;
-        sessionError = error;
-
-        if (error) {
-          console.error(
-            `❌ [MIDDLEWARE] Erro ao obter sessão: ${error.message}`,
-          );
-        }
-
-        if (session) {
-          console.log(
-            `✅ [MIDDLEWARE] Sessão válida encontrada: ${session.user?.id?.substring(0, 8)}...`,
-          );
-          console.log(
-            `⏰ [MIDDLEWARE] Sessão expira em: ${session.expires_at ? new Date(session.expires_at * 1000).toISOString() : "nunca"}`,
-          );
-
-          // Verificar se a sessão não expirou
-          const now = Math.floor(Date.now() / 1000);
-          if (session.expires_at && session.expires_at <= now) {
-            console.warn(
-              `⚠️ [MIDDLEWARE] Sessão expirada há ${now - session.expires_at} segundos`,
+        cachedAuth = optimizedAuthCache.getCachedAuth();
+        if (cachedAuth && cachedAuth.isValid) {
+          if (optimizedAuthCache.isSessionStillValid(cachedAuth.session)) {
+            console.log(
+              `✅ [MIDDLEWARE-OPTIMIZED] Autenticação válida (cache otimizado): ${cachedAuth.user?.id?.substring(0, 8)}...`
             );
-            session = null;
+            isAuthenticated = true;
+          } else {
+            console.log(`⚠️ [MIDDLEWARE-OPTIMIZED] Cache expirado, limpando`);
+            optimizedAuthCache.clearCache();
           }
-        } else {
-          console.warn(`⚠️ [MIDDLEWARE] Nenhuma sessão encontrada`);
         }
-      } catch (authError) {
-        console.error(
-          `❌ [MIDDLEWARE] Erro na verificação de autenticação:`,
-          authError,
-        );
-        sessionError = authError;
+      } catch (cacheError) {
+        console.warn(`⚠️ [MIDDLEWARE-OPTIMIZED] Erro no cache otimizado:`, cacheError);
       }
 
-      // Se há cookies de autenticação mas não conseguimos obter a sessão,
-      // vamos ser mais permissivos e permitir o acesso
-      if (!session && authCookies.length > 0) {
-        console.log(
-          `🤔 [MIDDLEWARE] Sem sessão mas com cookies auth (${authCookies.length}), permitindo acesso`,
+      // Se não há cache válido: configurar Supabase apenas quando necessário
+      if (!isAuthenticated) {
+        console.log(`🔄 [MIDDLEWARE-OPTIMIZED] Verificação Supabase necessária`);
+        
+        // Configurar cliente Supabase com configuração otimizada
+        const supabase = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            cookies: {
+              get(name: string) {
+                const value = request.cookies.get(name)?.value;
+                return value;
+              },
+              set(name: string, value: string, options: any) {
+                request.cookies.set({ name, value, ...options });
+                response = NextResponse.next({ request: { headers: request.headers } });
+                response.cookies.set({ name, value, ...options });
+              },
+              remove(name: string, options: any) {
+                request.cookies.set({ name, value: "", ...options });
+                response = NextResponse.next({ request: { headers: request.headers } });
+                response.cookies.set({ name, value: "", ...options });
+              },
+            },
+            auth: {
+              persistSession: true,
+              autoRefreshToken: false,
+            },
+          }
         );
-        console.log(
-          `🔄 [MIDDLEWARE] Client-side vai tentar recuperar autenticação`,
-        );
-        return addSecurityHeaders(response, startTime, pathname);
+
+        // Verificação otimizada com timeout para mobile
+        try {
+          const timeoutMs = isMobile ? 8000 : 5000;
+          const sessionPromise = supabase.auth.getSession();
+          
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Auth timeout')), timeoutMs);
+          });
+          
+          const { data, error } = await Promise.race([
+            sessionPromise,
+            timeoutPromise
+          ]) as any;
+          
+          if (error) {
+            console.error(`❌ [MIDDLEWARE-OPTIMIZED] Erro ao obter sessão: ${error.message}`);
+          } else if (data?.session?.user) {
+            const session = data.session;
+            console.log(
+              `✅ [MIDDLEWARE-OPTIMIZED] Sessão válida encontrada: ${session.user.id?.substring(0, 8)}...`
+            );
+            
+            // Verificar expiração com buffer
+            const now = Math.floor(Date.now() / 1000);
+            const sessionBuffer = 30;
+            
+            if (session.expires_at && session.expires_at <= (now + sessionBuffer)) {
+              console.warn(`⚠️ [MIDDLEWARE-OPTIMIZED] Sessão prestes a expirar`);
+            } else {
+              // Atualizar cache otimizado
+              optimizedAuthCache.setCachedAuth(session.user, session, 'fresh');
+              isAuthenticated = true;
+            }
+          } else {
+            console.warn(`⚠️ [MIDDLEWARE-OPTIMIZED] Nenhuma sessão encontrada`);
+          }
+        } catch (authError: any) {
+          console.error(`❌ [MIDDLEWARE-OPTIMIZED] Erro na verificação:`, authError?.message || authError);
+        }
       }
 
-      // Se não há sessão e não há cookies de auth, redirecionar para login
-      if (!session && authCookies.length === 0) {
+      // === OTIMIZAÇÃO 4: Redirecionamento otimizado ===
+      if (!isAuthenticated) {
         console.log(
-          `🚫 [MIDDLEWARE] Sem autenticação, redirecionando para login`,
+          `🚫 [MIDDLEWARE-OPTIMIZED] Acesso negado para: ${pathname} - Redirecionando para /auth`
         );
+
         const redirectUrl = new URL("/auth", request.url);
-        redirectUrl.searchParams.set("redirectTo", pathname);
+        // Para mobile: adicionar parâmetro para otimizar UX
+        if (isMobile) {
+          redirectUrl.searchParams.set("mobile", "true");
+        }
+        redirectUrl.searchParams.set("redirect", pathname);
 
         const redirectResponse = NextResponse.redirect(redirectUrl);
-        return addSecurityHeaders(redirectResponse, startTime, pathname);
+        return addSecurityHeaders(redirectResponse, startTime, pathname, { redirected: true });
       }
 
-      // Se chegou até aqui, usuário está autenticado ou tem potencial de estar
-      console.log(`✅ [MIDDLEWARE] Acesso autorizado para: ${pathname}`);
+      console.log(`✅ [MIDDLEWARE-OPTIMIZED] Acesso autorizado para: ${pathname}`);
     }
 
-    // Tratamento especial para página de auth
-    if (pathname.startsWith("/auth")) {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          console.log(
-            `🔄 [MIDDLEWARE] Usuário já autenticado, redirecionando da página de auth`,
-          );
-          const redirectTo =
-            request.nextUrl.searchParams.get("redirectTo") || "/";
-          const redirectResponse = NextResponse.redirect(
-            new URL(redirectTo, request.url),
-          );
-          return addSecurityHeaders(redirectResponse, startTime, pathname);
-        }
-      } catch (error) {
-        console.log(
-          `ℹ️ [MIDDLEWARE] Erro ao verificar sessão na página auth (permitindo acesso):`,
-          error,
-        );
-        // Permitir acesso à página de auth mesmo com erro
-      }
-    }
-
-    return addSecurityHeaders(response, startTime, pathname);
+    // === OTIMIZAÇÃO 5: Headers de segurança e cache ===
+    return addSecurityHeaders(response, startTime, pathname, {
+      isMobile,
+      isAuthenticated: isProtectedRoute
+    });
   } catch (error) {
-    console.error(`❌ [MIDDLEWARE] Erro crítico no middleware:`, error);
-
-    // Em caso de erro crítico, permitir acesso para não quebrar a aplicação
-    console.log(
-      `🚨 [MIDDLEWARE] Permitindo acesso devido a erro crítico: ${pathname}`,
-    );
-    return addSecurityHeaders(response, startTime, pathname);
+    console.error(`❌ [MIDDLEWARE-OPTIMIZED] Erro inesperado:`, error);
+    return addSecurityHeaders(response, startTime, pathname, { error: true });
   }
 }
 
+/**
+ * Adiciona headers de segurança otimizados
+ */
 function addSecurityHeaders(
   response: NextResponse,
   startTime: number,
   pathname: string,
-): NextResponse {
-  // Adicionar headers de segurança
-  response.headers.set("X-Frame-Options", "DENY");
+  context?: { 
+    isMobile?: boolean; 
+    isAuthenticated?: boolean;
+    error?: boolean;
+    redirected?: boolean;
+    cached?: boolean;
+    rateLimited?: boolean;
+    userId?: string;
+    fallback?: boolean;
+  }
+) {
+  const duration = Date.now() - startTime;
+  const {
+    isMobile = false,
+    isAuthenticated = false,
+    error = false,
+    redirected = false,
+    cached = false,
+    userId
+  } = context || {};
+
+  // Headers básicos de segurança
   response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-XSS-Protection", "1; mode=block");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
 
-  // Adicionar header de timing para debug
-  const duration = Date.now() - startTime;
-  response.headers.set("X-Middleware-Duration", `${duration}ms`);
+  // Cache otimizado para mobile
+  if (isMobile && !error && !redirected) {
+    response.headers.set("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
+  }
 
+  // Headers de debug e monitoramento
+  response.headers.set("X-Middleware-Duration", `${duration}ms`);
+  response.headers.set("X-Middleware-Version", "optimized-v1.0");
+  
+  if (cached) response.headers.set("X-Auth-Source", "cache");
+  if (userId) response.headers.set("X-User-Id", userId.substring(0, 8));
+  if (error) response.headers.set("X-Auth-Error", "true");
+  
   console.log(
-    `⏱️ [MIDDLEWARE] Processamento concluído em ${duration}ms para: ${pathname}`,
+    `⚡ [MIDDLEWARE-OPTIMIZED] Concluído: ${pathname} | ${duration}ms | Mobile: ${isMobile} | Auth: ${isAuthenticated} | Error: ${error}`
   );
 
   return response;
@@ -268,13 +285,12 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
+     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
-     * - api routes that don't need auth (health)
-     * - manifest and other static assets
      */
-    "/((?!_next/static|_next/image|favicon.ico|public|api/health|manifest|icon-).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|public|sw.js|manifest.json).*)",
   ],
 };

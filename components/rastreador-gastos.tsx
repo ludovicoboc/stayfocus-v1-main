@@ -69,3 +69,6 @@ export function RastreadorGastos() {
     </Card>
   )
 }
+
+// Export default para lazy loading
+export default RastreadorGastos

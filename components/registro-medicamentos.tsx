@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useCallback, useMemo } from "react";
 import { useSaude } from "@/hooks/use-saude";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,87 @@ import { format } from "date-fns";
 import type { NovoMedicamento, FrequenciaMedicamento } from "@/types/saude";
 import { getCurrentDateString } from "@/lib/utils";
 
-export function RegistroMedicamentos({ date }: { date?: string }) {
+// Componente memoizado para cards de estatísticas
+const MedicamentoStatsCard = memo(function MedicamentoStatsCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  iconColor = "text-green-400"
+}: {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: any;
+  iconColor?: string;
+}) {
+  return (
+    <Card className="bg-slate-800 border-slate-700">
+      <CardContent className="p-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm text-slate-400">{title}</p>
+          <p className="text-2xl font-bold text-white">{value}</p>
+          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+        </div>
+        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+
+// Componente memoizado para item da lista de medicamentos
+const MedicamentoListItem = memo(function MedicamentoListItem({
+  medicamento,
+  onDelete
+}: {
+  medicamento: any;
+  onDelete: (id: string) => void;
+}) {
+  const handleDelete = useCallback(() => {
+    onDelete(medicamento.id);
+  }, [medicamento.id, onDelete]);
+
+  return (
+    <div className="flex items-center justify-between p-3 bg-slate-750 rounded-lg border border-slate-700">
+      <div className="flex items-center">
+        <Badge
+          variant="outline"
+          className="bg-blue-500/10 text-blue-400 border-blue-500/30"
+        >
+          {medicamento.horarios[0]}
+        </Badge>
+        <div className="ml-3">
+          <p className="text-white font-medium">{medicamento.nome}</p>
+          <p className="text-sm text-slate-400">
+            Frequência: {medicamento.frequencia}, Intervalo:{" "}
+            {medicamento.intervalo_horas} horas
+          </p>
+        </div>
+      </div>
+      <div className="flex space-x-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-slate-400 hover:text-white"
+        >
+          <Edit className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-slate-400 hover:text-red-400"
+          onClick={handleDelete}
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+  );
+});
+
+export const RegistroMedicamentos = memo(function RegistroMedicamentos({ date }: { date?: string }) {
   const [currentDate, setCurrentDate] = useState<string>(
     date || getCurrentDateString(),
   );
@@ -70,11 +150,11 @@ export function RegistroMedicamentos({ date }: { date?: string }) {
     setNovoMedicamento((prev) => ({ ...prev, data_inicio: currentDate }));
   }, [currentDate]);
 
-  const handleDateChange = (newDate: string) => {
+  const handleDateChange = useCallback((newDate: string) => {
     setCurrentDate(newDate);
-  };
+  }, []);
 
-  const adicionarHorario = () => {
+  const adicionarHorario = useCallback(() => {
     if (!horarioAtual) return;
 
     const horarios = [...(novoMedicamento.horarios || []), horarioAtual];
@@ -89,18 +169,18 @@ export function RegistroMedicamentos({ date }: { date?: string }) {
       ...novoMedicamento,
       horarios,
     });
-  };
+  }, [horarioAtual, novoMedicamento]);
 
-  const removerHorario = (index: number) => {
+  const removerHorario = useCallback((index: number) => {
     const horarios = [...(novoMedicamento.horarios || [])];
     horarios.splice(index, 1);
     setNovoMedicamento({
       ...novoMedicamento,
       horarios,
     });
-  };
+  }, [novoMedicamento]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (
       !novoMedicamento.nome ||
       !novoMedicamento.dosagem ||
@@ -130,9 +210,9 @@ export function RegistroMedicamentos({ date }: { date?: string }) {
 
     setModalAberto(false);
     resetForm();
-  };
+  }, [novoMedicamento, adicionarMedicamento]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setNovoMedicamento({
       nome: "",
       dosagem: "",
@@ -142,7 +222,7 @@ export function RegistroMedicamentos({ date }: { date?: string }) {
       observacoes: "",
     });
     setHorarioAtual("08:00");
-  };
+  }, []);
 
   return (
     <div className="mb-8">
@@ -169,49 +249,25 @@ export function RegistroMedicamentos({ date }: { date?: string }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="bg-slate-800 border-slate-700">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Total de Medicamentos</p>
-              <p className="text-2xl font-bold text-white">
-                {resumoMedicamentos.total}
-              </p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-              <Pill className="w-4 h-4 text-green-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-800 border-slate-700">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Tomados Hoje</p>
-              <p className="text-2xl font-bold text-white">
-                {resumoMedicamentos.tomadosHoje}
-              </p>
-              <p className="text-xs text-slate-500">0% dos medicamentos</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-800 border-slate-700">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Próxima Dose</p>
-              <p className="text-2xl font-bold text-white">
-                {resumoMedicamentos.proximaDose || "N/A"}
-              </p>
-              <p className="text-xs text-slate-500">Sem medicamentos</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-green-400" />
-            </div>
-          </CardContent>
-        </Card>
+        <MedicamentoStatsCard
+          title="Total de Medicamentos"
+          value={resumoMedicamentos.total}
+          icon={Pill}
+        />
+        
+        <MedicamentoStatsCard
+          title="Tomados Hoje"
+          value={resumoMedicamentos.tomadosHoje}
+          subtitle="0% dos medicamentos"
+          icon={CheckCircle}
+        />
+        
+        <MedicamentoStatsCard
+          title="Próxima Dose"
+          value={resumoMedicamentos.proximaDose || "N/A"}
+          subtitle="Sem medicamentos"
+          icon={Clock}
+        />
       </div>
 
       <Card className="bg-slate-800 border-slate-700">
@@ -240,43 +296,11 @@ export function RegistroMedicamentos({ date }: { date?: string }) {
           ) : (
             <div className="space-y-3">
               {medicamentos.map((med) => (
-                <div
+                <MedicamentoListItem
                   key={med.id}
-                  className="flex items-center justify-between p-3 bg-slate-750 rounded-lg border border-slate-700"
-                >
-                  <div className="flex items-center">
-                    <Badge
-                      variant="outline"
-                      className="bg-blue-500/10 text-blue-400 border-blue-500/30"
-                    >
-                      {med.horarios[0]}
-                    </Badge>
-                    <div className="ml-3">
-                      <p className="text-white font-medium">{med.nome}</p>
-                      <p className="text-sm text-slate-400">
-                        Frequência: {med.frequencia}, Intervalo:{" "}
-                        {med.intervalo_horas} horas
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-slate-400 hover:text-white"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-slate-400 hover:text-red-400"
-                      onClick={() => excluirMedicamento(med.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
+                  medicamento={med}
+                  onDelete={excluirMedicamento}
+                />
               ))}
             </div>
           )}
@@ -478,4 +502,7 @@ export function RegistroMedicamentos({ date }: { date?: string }) {
       </Dialog>
     </div>
   );
-}
+});
+
+// Export default para lazy loading
+export default RegistroMedicamentos;

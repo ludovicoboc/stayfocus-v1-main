@@ -2,34 +2,70 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import {
-  createClient,
-  withAuthenticatedSupabase,
-  getCurrentAuthenticatedUser,
-} from "@/lib/supabase";
+import { createClient, withAuthenticatedSupabase, getCurrentAuthenticatedUser } from "@/lib/supabase";
+import { createDebouncedFunction, DEBOUNCE_CONFIGS } from "@/lib/request-debouncer";
+import { optimizedAuthCache } from "@/lib/auth-cache";
 import { validateAuthState, withAuth, requireAuth } from "@/lib/auth-utils";
-import type {
-  Concurso,
-  Disciplina,
-  Topico,
-  Questao,
-  Simulado,
-} from "@/types/concursos";
-import {
-  validateConcurso,
-  validateQuestao,
-  validateData,
-  sanitizeString,
-  sanitizeDate,
-} from "@/utils/validations";
+import type { Concurso, Disciplina, Topico, Questao, Simulado } from "@/types/concursos";
+import { validateConcurso, validateQuestao, validateData, sanitizeString, sanitizeDate } from "@/utils/validations";
 import { handleSupabaseCompetitionError } from "@/lib/error-handler";
 
-// Cache simples para concursos
-const competitionsCache = new Map<
-  string,
-  { data: Concurso[]; timestamp: number }
->();
+// Cache otimizado para concursos
+const competitionsCache = new Map<string, { data: Concurso[]; timestamp: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+const DEBOUNCE_KEY = "concursos";
+
+// Função debounced para fetch de concursos
+const debouncedFetchConcursos = createDebouncedFunction(
+  `${DEBOUNCE_KEY}_fetch`,
+  async (userId: string) => {
+    return await performFetchConcursos(userId);
+  },
+  'API_CALL'
+);
+
+/**
+ * Executa busca otimizada de concursos
+ */
+async function performFetchConcursos(userId: string): Promise<Concurso[]> {
+  const cacheKey = `competitions_${userId}`;
+
+  // Verificar cache primeiro
+  if (competitionsCache.has(cacheKey)) {
+    const cached = competitionsCache.get(cacheKey)!;
+    if (Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.data;
+    }
+  }
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("competitions")
+    .select(`
+      *,
+      competition_subjects!inner (
+        *,
+        competition_topics (*)
+      ),
+      competition_questions (*)
+    `)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(handleSupabaseCompetitionError(error));
+  }
+
+  const competitions = data || [];
+  
+  // Atualizar cache
+  competitionsCache.set(cacheKey, {
+    data: competitions,
+    timestamp: Date.now(),
+  });
+
+  return competitions;
+}
 
 export function useConcursos() {
   const { user } = useAuth();
@@ -37,66 +73,27 @@ export function useConcursos() {
   const [concursos, setConcursos] = useState<Concurso[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchConcursos();
-    }
-  }, [user]);
-
-  // Buscar concursos com consulta otimizada
+  // Buscar concursos com debouncing
   const fetchConcursos = useCallback(async () => {
-    const result = await withAuth(async (authUser) => {
-      const cacheKey = `competitions_${authUser.id}`;
-
-      // Verificar cache primeiro
-      if (competitionsCache.has(cacheKey)) {
-        const cached = competitionsCache.get(cacheKey)!;
-        if (Date.now() - cached.timestamp < CACHE_DURATION) {
-          setConcursos(cached.data);
-          setLoading(false);
-          return cached.data;
-        }
-      }
-
-      setLoading(true);
-
-      const { data, error } = await supabase
-        .from("competitions")
-        .select(
-          `
-          *,
-          competition_subjects!inner (
-            *,
-            competition_topics (*)
-          ),
-          competition_questions (*)
-        `,
-        )
-        .eq("user_id", authUser.id)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        throw new Error(handleSupabaseError(error));
-      }
-
-      const competitions = data || [];
-
-      // Atualizar cache
-      competitionsCache.set(cacheKey, {
-        data: competitions,
-        timestamp: Date.now(),
-      });
-
-      setConcursos(competitions);
-      return competitions;
-    });
-
-    if (result.error) {
-      console.error("Erro ao buscar concursos:", result.error);
+    if (!user?.id) {
+      setLoading(false);
+      return;
     }
 
-    setLoading(false);
-  }, [user]);
+    try {
+      const competitions = await debouncedFetchConcursos(user.id);
+      setConcursos(competitions);
+    } catch (error) {
+      console.error("Erro ao buscar concursos:", error);
+      setConcursos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchConcursos();
+  }, [fetchConcursos]);
 
   // Criar concurso otimizado
   const createCompetition = useCallback(
@@ -332,8 +329,6 @@ export function useConcursos() {
 
   const createTestData = async (concursoId: string) => {
     const result = await withAuth(async (authUser) => {
-      console.log("🌱 Criando dados de teste para concurso:", concursoId);
-
       // Criar concurso
       const { data: concursoData, error: concursoError } = await supabase
         .from("competitions")
@@ -445,8 +440,6 @@ export function useConcursos() {
       ];
 
       await supabase.from("competition_questions").upsert(questoes);
-
-      console.log("✅ Dados de teste criados com sucesso!");
       return concursoData;
     });
 
@@ -465,24 +458,16 @@ export function useConcursos() {
     const MAX_RETRIES = 2;
 
     try {
-      console.log("🔍 Iniciando busca de concurso completo, ID:", id);
-      console.log("🔄 Tentativa:", retryCount + 1);
-
       // Usar cliente autenticado
       return await withAuthenticatedSupabase(async (authClient) => {
         // Verificar usuário autenticado
         const authUser = await getCurrentAuthenticatedUser();
-        console.log("👤 Usuario autenticado:", authUser.id);
-
         // Verificar acesso ao banco de dados
         const { data: healthCheck } = await authClient
           .from("competitions")
           .select("count", { count: "exact", head: true })
           .eq("user_id", authUser.id)
           .limit(1);
-
-        console.log("🏥 Health check - acesso ao banco:", healthCheck !== null);
-
         // Primeiro, verificar se o concurso existe
         const { data: existeData, error: existeError } = await authClient
           .from("competitions")
@@ -496,13 +481,7 @@ export function useConcursos() {
           );
           throw existeError;
         }
-
-        console.log("📋 Resultado da verificação:", existeData);
         if (existeData && existeData.length > 0) {
-          console.log(
-            "🔍 Concurso existe, pertence ao usuário:",
-            existeData[0].user_id,
-          );
           if (existeData[0].user_id !== authUser.id) {
             console.warn(
               "⚠️ Concurso pertence a outro usuário:",
@@ -518,9 +497,6 @@ export function useConcursos() {
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
             )
           ) {
-            console.log(
-              "💡 ID parece ser um UUID válido, mas concurso não existe",
-            );
           }
         }
 
@@ -547,9 +523,6 @@ export function useConcursos() {
 
             // Se for o ID específico do teste, criar dados de teste
             if (id === "3c6dff36-4971-4f3e-ac56-701efa04cd86") {
-              console.log(
-                "🎯 Detectado ID de teste, criando dados automaticamente...",
-              );
               const testData = await createTestData(id);
               if (testData) {
                 return await fetchConcursoCompleto(id, retryCount + 1);
@@ -557,7 +530,6 @@ export function useConcursos() {
             }
 
             // Listar concursos disponíveis
-            console.log("📋 Listando concursos disponíveis para o usuário...");
             const { data: availableCompetitions } = await authClient
               .from("competitions")
               .select("id, title, status")
@@ -565,17 +537,12 @@ export function useConcursos() {
               .limit(5);
 
             if (availableCompetitions && availableCompetitions.length > 0) {
-              console.log("📌 Concursos disponíveis:", availableCompetitions);
             } else {
-              console.log("📭 Nenhum concurso encontrado para este usuário");
             }
           }
 
           return null;
         }
-
-        console.log("✅ Concurso encontrado:", concursoData.title);
-
         // Fetch subjects with topics in a single query using JOIN
         const { data: disciplinasComTopicos, error: disciplinasError } =
           await authClient
@@ -602,17 +569,6 @@ export function useConcursos() {
           ...concursoData,
           disciplinas: disciplinasFormatadas,
         } as Concurso;
-
-        console.log("📊 Concurso completo carregado:", {
-          id: resultado.id,
-          titulo: resultado.title,
-          disciplinas: disciplinasFormatadas.length,
-          totalTopicos: disciplinasFormatadas.reduce(
-            (acc, d) => acc + (d.topicos?.length || 0),
-            0,
-          ),
-        });
-
         return resultado;
       });
     } catch (error: any) {
@@ -625,7 +581,6 @@ export function useConcursos() {
           error?.message?.includes("unauthorized")) &&
         retryCount < MAX_RETRIES
       ) {
-        console.log("🔄 Erro de autenticação detectado, tentando novamente...");
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return await fetchConcursoCompleto(id, retryCount + 1);
       }
@@ -636,9 +591,6 @@ export function useConcursos() {
 
   const adicionarConcurso = async (concurso: Concurso) => {
     if (!user) return null;
-
-    console.log("🎯 Iniciando criação de concurso:", concurso.title);
-
     try {
       // Sanitizar dados de entrada
       const concursoSanitizado = {
@@ -678,16 +630,9 @@ export function useConcursos() {
         console.error("❌ Erro ao inserir concurso:", concursoError);
         throw concursoError;
       }
-
-      console.log("✅ Concurso criado com ID:", concursoData.id);
-
       // Insert subjects and topics
       if (concurso.disciplinas && concurso.disciplinas.length > 0) {
-        console.log(`📚 Inserindo ${concurso.disciplinas.length} disciplinas`);
-
         for (const disciplina of concurso.disciplinas) {
-          console.log(`📖 Criando disciplina: ${disciplina.name}`);
-
           const { data: disciplinaData, error: disciplinaError } =
             await supabase
               .from("competition_subjects")
@@ -703,14 +648,7 @@ export function useConcursos() {
             console.error("❌ Erro ao inserir disciplina:", disciplinaError);
             throw disciplinaError;
           }
-
-          console.log(`✅ Disciplina criada com ID: ${disciplinaData.id}`);
-
           if (disciplina.topicos && disciplina.topicos.length > 0) {
-            console.log(
-              `📝 Inserindo ${disciplina.topicos.length} tópicos para disciplina ${disciplina.name}`,
-            );
-
             const topicosToInsert = disciplina.topicos.map((topico) => {
               // Tratamento seguro para tópicos que podem ser string ou objeto
               const nomeTopico =
@@ -733,17 +671,12 @@ export function useConcursos() {
               console.error("❌ Erro ao inserir tópicos:", topicosError);
               throw topicosError;
             }
-
-            console.log(
-              `✅ ${topicosToInsert.length} tópicos inseridos com sucesso`,
-            );
           }
         }
       }
 
       // Refresh the list
       await fetchConcursos();
-      console.log("🎉 Concurso criado com sucesso! ID:", concursoData.id);
       return concursoData;
     } catch (error) {
       console.error("❌ Erro completo ao adicionar concurso:", error);
@@ -882,25 +815,25 @@ export function useConcursos() {
     }
   };
 
+  // NOVA IMPLEMENTAÇÃO: Buscar questões usando view frontend otimizada
   const buscarQuestoesConcurso = async (concursoId: string) => {
-    if (!user) return [];
+    if (!user) return []
 
     try {
+      // Usar view frontend que é otimizada e filtra automaticamente questões ativas
       const { data, error } = await supabase
-        .from("competition_questions")
-        .select(
-          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at",
-        )
+        .from("v_competition_questions_frontend")
+        .select("*")
         .eq("competition_id", concursoId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
 
-      if (error) throw error;
-      return data as Questao[];
+      if (error) throw error
+      return data as Questao[]
     } catch (error) {
-      console.error("Error fetching competition questions:", error);
-      return [];
+      console.error("Error fetching competition questions:", error)
+      return []
     }
-  };
+  }
 
   // Simulados
   const adicionarSimulado = async (simulado: Simulado) => {
@@ -949,6 +882,25 @@ export function useConcursos() {
       return [];
     }
   };
+
+  // NOVA IMPLEMENTAÇÃO: Usar função otimizada para estatísticas de simulação
+  const obterEstatisticasSimulacao = async (simuladoId: string) => {
+    if (!user) return null
+    
+    try {
+      const { data, error } = await supabase.rpc('get_simulation_statistics', {
+        p_simulation_id: simuladoId,
+        p_user_id: user.id
+      })
+      
+      if (error) throw error
+      
+      return data && data.length > 0 ? data[0] : null
+    } catch (error) {
+      console.error("Error fetching simulation statistics:", error)
+      return null
+    }
+  }
 
   const marcarSimuladoFavorito = async (
     simuladoId: string,
@@ -1088,6 +1040,7 @@ export function useConcursos() {
 
     // Utilitários
     calcularProgressoConcurso,
+    obterEstatisticasSimulacao, // Nova função otimizada
     validateCompetitionAccess,
     handleSupabaseError,
 

@@ -33,7 +33,6 @@ export default function ConcursoDetalhesPage() {
   const {
     user,
     loading: authLoading,
-    isAuthenticated,
     initialized,
   } = useAuth();
   const {
@@ -85,50 +84,28 @@ export default function ConcursoDetalhesPage() {
       return;
     }
 
-    if (!isAuthenticated) {
+    if (!user) {
       console.warn("⚠️ Usuário não autenticado - aguardando autenticação...");
       return;
     }
 
-    try {
-      console.log("📊 Iniciando busca de dados do concurso...", {
-        concursoId: id,
-        userId: user?.id,
-        isAuthenticated,
-      });
-
-      setLoading(true);
+    try {      setLoading(true);
       const data = await fetchConcursoCompleto(id);
 
       if (!data) {
         console.warn("⚠️ Concurso não encontrado ou não acessível");
         setConcurso(null);
 
-        // Buscar concursos disponíveis para sugerir
-        console.log("🔍 Buscando concursos alternativos...");
-        await loadConcursosDisponiveis();
+        // Buscar concursos disponíveis para sugerir        await loadConcursosDisponiveis();
         return;
-      }
-
-      console.log("✅ Concurso carregado com sucesso:", {
-        id: data.id,
-        title: data.title,
-        disciplinasCount: data.disciplinas?.length || 0,
-      });
-
-      setConcurso(data);
+      }      setConcurso(data);
 
       // Preselect first discipline if available
       if (
         data.disciplinas &&
         data.disciplinas.length > 0 &&
         data.disciplinas[0].id
-      ) {
-        console.log(
-          "🎯 Selecionando primeira disciplina:",
-          data.disciplinas[0].name,
-        );
-        setDisciplinaSelecionada(data.disciplinas[0].id);
+      ) {        setDisciplinaSelecionada(data.disciplinas[0].id);
       }
     } catch (error) {
       console.error("❌ Erro ao carregar concurso:", error);
@@ -141,9 +118,7 @@ export default function ConcursoDetalhesPage() {
 
   // Load available competitions for suggestions
   const loadConcursosDisponiveis = async () => {
-    try {
-      console.log("🔍 Carregando concursos disponíveis para sugestão...");
-      await fetchConcursos();
+    try {      await fetchConcursos();
       setConcursosDisponiveis(concursos.slice(0, 3)); // Show only first 3
     } catch (error) {
       console.error("❌ Erro ao carregar concursos disponíveis:", error);
@@ -157,22 +132,14 @@ export default function ConcursoDetalhesPage() {
       return;
     }
 
-    if (!isAuthenticated) {
+    if (!user) {
       console.warn(
         "⚠️ Usuário não autenticado - não é possível carregar questões",
       );
       return;
     }
 
-    try {
-      console.log("📝 Iniciando carregamento de questões do concurso...", {
-        concursoId: id,
-        userId: user?.id,
-      });
-
-      const questoes = await buscarQuestoesConcurso(id);
-      console.log(`✅ ${questoes.length} questões carregadas com sucesso`);
-      setQuestoesConcurso(questoes);
+    try {      const questoes = await buscarQuestoesConcurso(id);      setQuestoesConcurso(questoes);
     } catch (error) {
       console.error("❌ Erro ao carregar questões:", error);
       setQuestoesConcurso([]);
@@ -180,43 +147,25 @@ export default function ConcursoDetalhesPage() {
   };
 
   // Effects
-  useEffect(() => {
-    console.log("🔄 Effect triggered - Auth state:", {
-      user: !!user,
-      userId: user?.id,
-      isAuthenticated,
-      initialized,
-      authLoading,
-      concursoId: id,
-    });
-
-    // Aguardar a inicialização da autenticação
-    if (!initialized || authLoading) {
-      console.log("⏳ Aguardando inicialização da autenticação...");
-      return;
+  useEffect(() => {    // Aguardar a inicialização da autenticação
+    if (!initialized || authLoading) {      return;
     }
 
-    if (!isAuthenticated) {
+    if (!user) {
       console.warn("❌ Usuário não autenticado - redirecionamento necessário");
       setLoading(false);
       return;
     }
 
-    if (id && isAuthenticated) {
-      console.log("✅ Iniciando carregamento do concurso...");
-      loadConcurso();
+    if (id && user) {      loadConcurso();
     }
-  }, [user, id, isAuthenticated, initialized, authLoading]);
+  }, [user, id, initialized, authLoading]);
 
   useEffect(() => {
     // Carregar questões após o concurso ser carregado
-    if (concurso && isAuthenticated && id) {
-      console.log(
-        "📝 Concurso carregado, iniciando carregamento de questões...",
-      );
-      loadQuestoes();
+    if (concurso && user && id) {      loadQuestoes();
     }
-  }, [concurso, isAuthenticated, id]);
+  }, [concurso, user, id]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -408,7 +357,7 @@ export default function ConcursoDetalhesPage() {
   }
 
   // Not authenticated - redirect will be handled by middleware
-  if (!isAuthenticated) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
         <div className="text-center">

@@ -1,127 +1,185 @@
 import { supabase } from "./supabase";
+import { optimizedAuthCache, type CachedAuthState } from "./auth-cache";
+import { createDebouncedAuthCheck } from "./request-debouncer";
 import type { User } from "@supabase/supabase-js";
 
+// Instâncias debounced para diferentes operações
+const debouncedValidateAuth = createDebouncedAuthCheck(
+  'validateAuthState',
+  performAuthValidation
+);
+
+const debouncedSessionCheck = createDebouncedAuthCheck(
+  'sessionValidation', 
+  performSessionValidation
+);
+
 /**
- * Valida se o usuário está autenticado com retry automático
- * @param retryCount Número de tentativas já realizadas
- * @returns Promise<{ user: User | null, error: string | null }>
+ * Executa a validação real de autenticação com otimizações avançadas
  */
-export async function validateAuthState(retryCount = 0): Promise<{
-  user: User | null;
-  error: string | null;
-}> {
+async function performAuthValidation(retryCount = 0): Promise<CachedAuthState> {
   const MAX_RETRIES = 2;
 
   try {
-    console.log(`🔐 Validando autenticação (tentativa ${retryCount + 1})`);
+    // Usar cache otimizado como primeira verificação
+    return await optimizedAuthCache.validateWithOptimizations(
+      'auth_validation',
+      async () => {
+        // Verificar sessão no Supabase
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-    // Primeiro, verificar se temos uma sessão válida
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error("❌ [AUTH-UTILS] Erro ao obter sessão:", sessionError);
 
-    if (sessionError) {
-      console.error("❌ Erro ao obter sessão:", sessionError);
-
-      // Se for erro de JWT e ainda temos tentativas, tentar renovar
-      if (sessionError.message?.includes("JWT") && retryCount < MAX_RETRIES) {
-        console.log("🔄 Tentando renovar sessão...");
-        try {
-          await supabase.auth.refreshSession();
-          await new Promise((resolve) => setTimeout(resolve, 500)); // Aguardar 500ms
-          return await validateAuthState(retryCount + 1);
-        } catch (refreshError) {
-          console.error("❌ Erro ao renovar sessão:", refreshError);
-        }
-      }
-
-      return { user: null, error: sessionError.message };
-    }
-
-    if (!session?.user) {
-      console.log("ℹ️ Nenhuma sessão ativa encontrada");
-      return { user: null, error: "Usuário não autenticado" };
-    }
-
-    // Verificar se a sessão não expirou
-    const now = Math.floor(Date.now() / 1000);
-    if (session.expires_at && session.expires_at <= now) {
-      console.warn("⚠️ Sessão expirada");
-
-      if (retryCount < MAX_RETRIES) {
-        console.log("🔄 Tentando renovar sessão expirada...");
-        try {
-          const { data: refreshData, error: refreshError } =
-            await supabase.auth.refreshSession();
-          if (refreshError) throw refreshError;
-
-          if (refreshData.session?.user) {
-            console.log("✅ Sessão renovada com sucesso");
-            return { user: refreshData.session.user, error: null };
+          // Se for erro de JWT e ainda temos tentativas, tentar renovar
+          if (sessionError.message?.includes("JWT") && retryCount < MAX_RETRIES) {
+            try {
+              await supabase.auth.refreshSession();
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              return await performAuthValidation(retryCount + 1);
+            } catch (refreshError) {
+              console.error("❌ [AUTH-UTILS] Erro ao renovar sessão:", refreshError);
+            }
           }
-        } catch (refreshError) {
-          console.error("❌ Erro ao renovar sessão expirada:", refreshError);
+
+          return {
+            user: null,
+            session: null,
+            timestamp: Date.now(),
+            expiry: Date.now(),
+            isValid: false,
+            source: 'fresh' as const
+          };
         }
-      }
 
-      return { user: null, error: "Sessão expirada" };
-    }
-
-    // Fazer uma chamada de teste para verificar se o token ainda é válido
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError) {
-      console.error("❌ Erro ao validar usuário:", userError);
-
-      // Se for erro de autenticação e ainda temos tentativas
-      if (
-        (userError.message?.includes("JWT") ||
-          userError.message?.includes("invalid")) &&
-        retryCount < MAX_RETRIES
-      ) {
-        console.log("🔄 Token inválido, tentando renovar...");
-        try {
-          await supabase.auth.refreshSession();
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          return await validateAuthState(retryCount + 1);
-        } catch (refreshError) {
-          console.error("❌ Erro ao renovar token inválido:", refreshError);
+        if (!session?.user) {
+          return {
+            user: null,
+            session: null,
+            timestamp: Date.now(),
+            expiry: Date.now(),
+            isValid: false,
+            source: 'fresh' as const
+          };
         }
-      }
 
-      return { user: null, error: userError.message };
-    }
+        // Verificar se a sessão não expirou
+        const now = Math.floor(Date.now() / 1000);
+        if (session.expires_at && session.expires_at <= now) {
+          console.warn("⚠️ [AUTH-UTILS] Sessão expirada");
 
-    if (!user) {
-      console.log("ℹ️ Usuário não encontrado na validação");
-      return { user: null, error: "Usuário não autenticado" };
-    }
+          if (retryCount < MAX_RETRIES) {
+            try {
+              const { data: refreshData, error: refreshError } =
+                await supabase.auth.refreshSession();
+              if (refreshError) throw refreshError;
 
-    console.log("✅ Autenticação validada com sucesso:", {
-      userId: user.id,
-      email: user.email,
-    });
-    return { user, error: null };
+              if (refreshData.session?.user) {
+                return {
+                  user: refreshData.session.user,
+                  session: refreshData.session,
+                  timestamp: Date.now(),
+                  expiry: Date.now() + (5 * 60 * 1000),
+                  isValid: true,
+                  source: 'fresh' as const
+                };
+              }
+            } catch (refreshError) {
+              console.error("❌ [AUTH-UTILS] Erro ao renovar sessão expirada:", refreshError);
+            }
+          }
+
+          return {
+            user: null,
+            session: null,
+            timestamp: Date.now(),
+            expiry: Date.now(),
+            isValid: false,
+            source: 'fresh' as const
+          };
+        }
+
+        // Sessão válida
+        const result = {
+          user: session.user,
+          session,
+          timestamp: Date.now(),
+          expiry: Date.now() + (5 * 60 * 1000),
+          isValid: true,
+          source: 'fresh' as const
+        };
+
+        // Atualizar cache
+        optimizedAuthCache.setCachedAuth(session.user, session, 'fresh');
+        return result;
+      },
+      { forceRefresh: retryCount > 0 }
+    );
+
   } catch (error) {
-    console.error("❌ Erro inesperado na validação de autenticação:", error);
+    console.error("❌ [AUTH-UTILS] Erro inesperado na validação:", error);
 
     // Em caso de erro de rede, tentar novamente
     if (
       retryCount < MAX_RETRIES &&
       (error as any)?.message?.includes("network")
     ) {
-      console.log("🔄 Erro de rede detectado, tentando novamente...");
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      return await validateAuthState(retryCount + 1);
+      return await performAuthValidation(retryCount + 1);
     }
 
     return {
       user: null,
-      error: error instanceof Error ? error.message : "Erro desconhecido",
+      session: null,
+      timestamp: Date.now(),
+      expiry: Date.now(),
+      isValid: false,
+      source: 'fresh' as const
+    };
+  }
+}
+
+/**
+ * Validação específica de sessão (mais leve)
+ */
+async function performSessionValidation(): Promise<boolean> {
+  try {
+    return await optimizedAuthCache.validateWithOptimizations(
+      'session_validation',
+      async () => {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        return !error && !!session?.user && optimizedAuthCache.isSessionStillValid(session);
+      },
+      { bypassRateLimit: false }
+    ) as any;
+  } catch (error) {
+    console.error("❌ [AUTH-UTILS] Erro na validação de sessão:", error);
+    return false;
+  }
+}
+
+/**
+ * Valida se o usuário está autenticado com cache otimizado e debouncing
+ */
+export async function validateAuthState(forceRefresh = false): Promise<{
+  user: User | null;
+  error: string | null;
+}> {
+  try {
+    const result = await debouncedValidateAuth(forceRefresh ? 1 : 0);
+    
+    return {
+      user: result.user,
+      error: result.isValid ? null : "Usuário não autenticado"
+    };
+  } catch (error) {
+    console.error("❌ [AUTH-UTILS] Erro na validação:", error);
+    return {
+      user: null,
+      error: error instanceof Error ? error.message : "Erro desconhecido"
     };
   }
 }
@@ -137,12 +195,7 @@ export async function withAuth<T>(
   retryCount = 0,
 ): Promise<{ data: T | null; error: string | null }> {
   const MAX_RETRIES = 2;
-
-  console.log(
-    `🔒 Executando operação autenticada (tentativa ${retryCount + 1})`,
-  );
-
-  const { user, error } = await validateAuthState(retryCount);
+  const { user, error } = await validateAuthState(retryCount > 0);
 
   if (error || !user) {
     console.error("❌ Falha na autenticação para operação:", error);
@@ -153,9 +206,7 @@ export async function withAuth<T>(
   }
 
   try {
-    console.log("✅ Usuário autenticado, executando operação...");
     const data = await operation(user);
-    console.log("✅ Operação concluída com sucesso");
     return { data, error: null };
   } catch (operationError: any) {
     console.error("❌ Erro na operação autenticada:", operationError);
@@ -167,7 +218,6 @@ export async function withAuth<T>(
         operationError?.message?.includes("unauthorized")) &&
       retryCount < MAX_RETRIES
     ) {
-      console.log("🔄 Erro de autenticação na operação, tentando novamente...");
       await new Promise((resolve) => setTimeout(resolve, 1000));
       return await withAuth(operation, retryCount + 1);
     }
@@ -202,9 +252,7 @@ export function hasResourceAccess(
  * @throws Error se não autenticado
  */
 export async function requireAuth(retryCount = 0): Promise<User> {
-  console.log(`🔐 Requerendo autenticação (tentativa ${retryCount + 1})`);
-
-  const { user, error } = await validateAuthState(retryCount);
+  const { user, error } = await validateAuthState(retryCount > 0);
 
   if (error || !user) {
     const errorMessage =
@@ -212,84 +260,59 @@ export async function requireAuth(retryCount = 0): Promise<User> {
     console.error("❌ Autenticação requerida falhou:", errorMessage);
     throw new Error(errorMessage);
   }
-
-  console.log("✅ Autenticação requerida bem-sucedida:", { userId: user.id });
   return user;
 }
 
 /**
- * Verifica se a sessão do usuário ainda é válida com retry
- * @param retryCount Número de tentativas já realizadas
- * @returns Promise<boolean>
+ * Verifica se a sessão do usuário ainda é válida usando cache otimizado
  */
-export async function isSessionValid(retryCount = 0): Promise<boolean> {
-  const MAX_RETRIES = 1;
+export async function isSessionValid(forceRefresh = false): Promise<boolean> {
+  if (!forceRefresh) {
+    // Tentar usar cache primeiro
+    const cached = optimizedAuthCache.getCachedAuth();
+    if (cached) {
+      const isValid = cached.isValid && optimizedAuthCache.isSessionStillValid(cached.session);
+      return isValid;
+    }
+  }
 
+  // Se não há cache válido, usar validação debounced
   try {
-    console.log(
-      `🔍 Verificando validade da sessão (tentativa ${retryCount + 1})`,
-    );
-
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
-
-    if (error) {
-      console.error("❌ Erro ao verificar sessão:", error);
-
-      // Tentar uma vez mais em caso de erro
-      if (retryCount < MAX_RETRIES) {
-        console.log("🔄 Tentando verificar sessão novamente...");
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        return await isSessionValid(retryCount + 1);
-      }
-
-      return false;
-    }
-
-    if (!session) {
-      console.log("ℹ️ Nenhuma sessão encontrada");
-      return false;
-    }
-
-    // Verificar se o token não expirou
-    const now = Math.floor(Date.now() / 1000);
-    const isValid = session.expires_at ? session.expires_at > now : true;
-
-    console.log("🔍 Resultado da verificação de sessão:", {
-      isValid,
-      expiresAt: session.expires_at
-        ? new Date(session.expires_at * 1000).toISOString()
-        : "nunca",
-      timeLeft: session.expires_at
-        ? Math.max(0, session.expires_at - now)
-        : "indefinido",
-    });
-
+    const isValid = await debouncedSessionCheck();
     return isValid;
   } catch (error) {
-    console.error("❌ Erro inesperado ao verificar sessão:", error);
+    console.error("❌ [AUTH-UTILS] Erro na verificação de sessão:", error);
     return false;
   }
 }
 
 /**
- * Faz logout do usuário
- * @returns Promise<{ error: string | null }>
+ * Faz logout do usuário e limpa todos os caches
  */
 export async function signOut(): Promise<{ error: string | null }> {
   try {
     const { error } = await supabase.auth.signOut();
 
-    if (error) {
-      console.error("Erro ao fazer logout:", error);
-      return { error: error.message };
+    // Limpar cache otimizado independentemente do resultado
+    optimizedAuthCache.clearCache();
+    
+    // Cancelar validações debounced pendentes
+    if (debouncedValidateAuth.cancel) {
+      debouncedValidateAuth.cancel();
+    }
+    if (debouncedSessionCheck.cancel) {
+      debouncedSessionCheck.cancel();
     }
 
+    if (error) {
+      console.error("❌ [AUTH-UTILS] Erro ao fazer logout:", error);
+      return { error: error.message };
+    }
     return { error: null };
   } catch (error) {
-    console.error("Erro inesperado no logout:", error);
+    console.error("❌ [AUTH-UTILS] Erro inesperado no logout:", error);
+    // Limpar cache mesmo em caso de erro
+    optimizedAuthCache.clearCache();
     return {
       error: error instanceof Error ? error.message : "Erro no logout",
     };
@@ -297,9 +320,7 @@ export async function signOut(): Promise<{ error: string | null }> {
 }
 
 /**
- * Hook para escutar mudanças no estado de autenticação
- * @param callback Função chamada quando o estado muda
- * @returns Função para cancelar a escuta
+ * Hook otimizado para escutar mudanças no estado de autenticação
  */
 export function onAuthStateChange(
   callback: (user: User | null) => void,
@@ -307,10 +328,26 @@ export function onAuthStateChange(
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event, session) => {
+    // Atualizar cache otimizado com novo estado
+    if (event === 'SIGNED_OUT' || !session) {
+      optimizedAuthCache.clearCache();
+      // Cancelar validações pendentes
+      if (debouncedValidateAuth.cancel) {
+        debouncedValidateAuth.cancel();
+      }
+      if (debouncedSessionCheck.cancel) {
+        debouncedSessionCheck.cancel();
+      }
+    } else if (session?.user) {
+      optimizedAuthCache.setCachedAuth(session.user, session, 'fresh');
+    }
+
     callback(session?.user || null);
   });
 
-  return () => subscription.unsubscribe();
+  return () => {
+    subscription.unsubscribe();
+  };
 }
 
 /**

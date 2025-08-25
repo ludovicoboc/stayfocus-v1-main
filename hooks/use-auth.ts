@@ -1,90 +1,118 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase";
-import { authCache } from "@/lib/auth-cache";
-import { validateAuthState, onAuthStateChange } from "@/lib/auth-utils";
+import { useAuthOptimized } from "@/hooks/use-auth-optimized";
 import type { User, Session } from "@supabase/supabase-js";
 
+/**
+ * Hook de autenticação compatível com a versão anterior
+ * Agora usa internamente o sistema otimizado com cache e debouncing
+ */
 export function useAuth() {
+  // Usar versão otimizada internamente
+  const optimizedAuth = useAuthOptimized({
+    enableCache: true,
+    debounceTime: 300,
+    enableBackgroundRefresh: true
+  });
+
+  // Manter compatibilidade com interface anterior
+  return {
+    user: optimizedAuth.user,
+    session: optimizedAuth.session,
+    loading: optimizedAuth.loading,
+    initialized: optimizedAuth.initialized,
+    signIn: optimizedAuth.signIn,
+    signUp: optimizedAuth.signUp,
+    signOut: optimizedAuth.signOut,
+    // Adicionar função de compatibilidade
+    getCurrentSession: optimizedAuth.getCurrentSession
+  };
+}
+
+// === IMPLEMENTAÇÃO ANTERIOR (MANTIDA PARA REFERÊNCIA) ===
+// Esta implementação foi substituída pela versão otimizada
+// mas mantida comentada para referência e rollback se necessário
+
+/*
+function useAuthLegacy() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  
   const supabase = createClient();
 
-  // Função para inicializar autenticação usando cache
-  const initializeAuth = useCallback(async () => {
-    if (!initialized) {
-      console.log("🔐 [USE-AUTH] Inicializando autenticação...");
+  // Função simples para obter sessão atual
+  const getCurrentSession = useCallback(async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
       
-      // Primeiro, tentar usar cache
-      const cached = authCache.getCachedAuth();
-      if (cached) {
-        console.log("✅ [USE-AUTH] Usando dados do cache");
-        setUser(cached.user);
-        setSession(cached.session);
-        setLoading(false);
-        setInitialized(true);
-        return;
+      if (error) {
+        return { user: null, session: null };
       }
 
-      // Se não há cache, fazer validação completa
-      try {
-        const { user: validatedUser, error } = await validateAuthState();
-        
-        setUser(validatedUser);
-        setSession(authCache.getCachedAuth()?.session || null);
-        
-        if (error) {
-          console.log("ℹ️ [USE-AUTH] Usuário não autenticado:", error);
-        } else {
-          console.log("✅ [USE-AUTH] Usuário autenticado:", {
-            userId: validatedUser?.id?.substring(0, 8) + "...",
-            email: validatedUser?.email
-          });
-        }
-      } catch (error) {
-        console.error("❌ [USE-AUTH] Erro na inicialização:", error);
-        setUser(null);
-        setSession(null);
-      } finally {
-        setLoading(false);
-        setInitialized(true);
-      }
+      return { 
+        user: session?.user || null, 
+        session: session || null 
+      };
+    } catch (error) {
+      console.error("❌ [USE-AUTH-LEGACY] Erro na obtenção de sessão:", error);
+      return { user: null, session: null };
     }
-  }, [initialized]);
+  }, [supabase.auth]);
 
+  // Inicialização simples
   useEffect(() => {
     let mounted = true;
 
-    // Inicializar autenticação
-    initializeAuth();
-
-    // Escutar mudanças de autenticação usando auth-utils otimizado
-    const unsubscribe = onAuthStateChange((user) => {
-      if (mounted) {
-        console.log("🔄 [USE-AUTH] Auth state changed:", {
-          hasUser: !!user,
-          userId: user?.id?.substring(0, 8) + "..." || "none"
-        });
+    const initAuth = async () => {
+      try {
+        const { user: currentUser, session: currentSession } = await getCurrentSession();
         
-        setUser(user);
-        setSession(authCache.getCachedAuth()?.session || null);
-        setLoading(false);
-        setInitialized(true);
+        if (mounted) {
+          setUser(currentUser);
+          setSession(currentSession);
+          setLoading(false);
+          setInitialized(true);
+        }
+      } catch (error) {
+        console.error("❌ [USE-AUTH-LEGACY] Erro na inicialização:", error);
+        if (mounted) {
+          setUser(null);
+          setSession(null);
+          setLoading(false);
+          setInitialized(true);
+        }
       }
-    });
+    };
+
+    initAuth();
 
     return () => {
       mounted = false;
-      unsubscribe();
     };
-  }, [initializeAuth]);
+  }, [getCurrentSession]);
+
+  // Listener para mudanças de autenticação
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user || null);
+        setSession(session || null);
+        
+        if (!loading) {
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase.auth, loading]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log("🔐 Tentando fazer login para:", email);
       setLoading(true);
 
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -93,18 +121,12 @@ export function useAuth() {
       });
 
       if (error) {
-        console.error("❌ Erro no login:", error.message);
+        console.error("❌ [USE-AUTH-LEGACY] Erro no login:", error.message);
         throw error;
       }
-
-      console.log("✅ Login realizado com sucesso:", {
-        userId: data.user?.id,
-        email: data.user?.email,
-      });
-
-      return data;
+      return { user: data.user, session: data.session };
     } catch (error) {
-      console.error("❌ Erro ao fazer login:", error);
+      console.error("❌ [USE-AUTH-LEGACY] Erro no signIn:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -113,7 +135,6 @@ export function useAuth() {
 
   const signUp = async (email: string, password: string) => {
     try {
-      console.log("📝 Tentando criar conta para:", email);
       setLoading(true);
 
       const { data, error } = await supabase.auth.signUp({
@@ -122,19 +143,12 @@ export function useAuth() {
       });
 
       if (error) {
-        console.error("❌ Erro na criação de conta:", error.message);
+        console.error("❌ [USE-AUTH-LEGACY] Erro no registro:", error.message);
         throw error;
       }
-
-      console.log("✅ Conta criada com sucesso:", {
-        userId: data.user?.id,
-        email: data.user?.email,
-        needsConfirmation: !data.session,
-      });
-
-      return data;
+      return { user: data.user, session: data.session };
     } catch (error) {
-      console.error("❌ Erro ao criar conta:", error);
+      console.error("❌ [USE-AUTH-LEGACY] Erro no signUp:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -143,56 +157,21 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      console.log("👋 [USE-AUTH] Fazendo logout...");
       setLoading(true);
 
       const { error } = await supabase.auth.signOut();
-      
-      // Limpar cache independentemente do resultado
-      authCache.clearCache();
-      
+
       if (error) {
-        console.error("❌ [USE-AUTH] Erro no logout:", error.message);
+        console.error("❌ [USE-AUTH-LEGACY] Erro no logout:", error.message);
         throw error;
       }
-
-      console.log("✅ [USE-AUTH] Logout realizado com sucesso");
       setUser(null);
       setSession(null);
     } catch (error) {
-      console.error("❌ [USE-AUTH] Erro ao fazer logout:", error);
-      // Limpar estado local mesmo em caso de erro
-      setUser(null);
-      setSession(null);
+      console.error("❌ [USE-AUTH-LEGACY] Erro no signOut:", error);
       throw error;
     } finally {
       setLoading(false);
-    }
-  };
-
-  const refreshSession = async () => {
-    try {
-      console.log("🔄 [USE-AUTH] Renovando sessão...");
-      const { data, error } = await supabase.auth.refreshSession();
-
-      if (error) {
-        console.error("❌ [USE-AUTH] Erro ao renovar sessão:", error.message);
-        authCache.clearCache();
-        throw error;
-      }
-
-      if (data.session?.user) {
-        // Atualizar cache com nova sessão
-        authCache.setCachedAuth(data.session.user, data.session);
-        setUser(data.session.user);
-        setSession(data.session);
-      }
-
-      console.log("✅ [USE-AUTH] Sessão renovada com sucesso");
-      return data;
-    } catch (error) {
-      console.error("❌ [USE-AUTH] Erro ao renovar sessão:", error);
-      throw error;
     }
   };
 
@@ -204,7 +183,7 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    refreshSession,
-    isAuthenticated: !!user && !!session,
+    getCurrentSession,
   };
 }
+*/

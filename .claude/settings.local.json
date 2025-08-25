@@ -3,7 +3,14 @@
     "allow": [
       "Bash(npm run build:*)",
       "Bash(npx next:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(pkill:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(vercel)",
+      "Bash(vercel:*)"
     ],
     "deny": [],
     "ask": []

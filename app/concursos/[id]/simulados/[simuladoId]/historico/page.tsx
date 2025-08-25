@@ -38,7 +38,7 @@ interface Simulation {
 }
 
 export default function HistoricoSimuladoPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
   
@@ -50,10 +50,10 @@ export default function HistoricoSimuladoPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated || !simuladoId) return;
+    if (!user || !simuladoId) return;
     
     loadData();
-  }, [isAuthenticated, simuladoId]);
+  }, [user, simuladoId]);
 
   const loadData = async () => {
     try {

@@ -12,7 +12,13 @@ if (!supabaseAnonKey) {
   throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY não está configurada");
 }
 
-// Função para criar cliente Supabase (para componentes)
+// Utility para detectar mobile
+const isMobile = () => {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
+};
+
+// Função para criar cliente Supabase (para componentes) com otimizações
 export function createClient() {
   return createBrowserClient(supabaseUrl!, supabaseAnonKey!, {
     auth: {
@@ -26,7 +32,18 @@ export function createClient() {
     global: {
       headers: {
         "X-Client-Info": "stayfocus-alimentacao@1.0.0",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        "Cache-Control": "no-cache",
+        "User-Agent": typeof window !== 'undefined' ? navigator.userAgent : "stayfocus-server"
       },
+    },
+    // Configurações otimizadas para mobile
+    realtime: {
+      timeout: isMobile() ? 15000 : 10000,
+      heartbeatIntervalMs: isMobile() ? 60000 : 30000
     },
     // Configurações para melhor compatibilidade de cookies são gerenciadas internamente
   });
@@ -35,79 +52,161 @@ export function createClient() {
 // Cliente Supabase global para uso direto
 export const supabase = createClient();
 
-// Helper function to ensure authenticated requests
+// Helper function to ensure authenticated requests with retry logic
 export async function createAuthenticatedClient() {
   const client = createClient();
+  let retryCount = 0;
+  const maxRetries = 3;
 
-  try {
-    // Verificar se há uma sessão válida
-    const {
-      data: { session },
-      error,
-    } = await client.auth.getSession();
+  const attemptAuth = async (): Promise<typeof client> => {
+    try {
+      // Verificar se há uma sessão válida
+      const {
+        data: { session },
+        error,
+      } = await client.auth.getSession();
 
-    if (error) {
-      console.error("❌ Erro ao obter sessão para cliente autenticado:", error);
-      throw new Error(`Erro de autenticação: ${error.message}`);
-    }
-
-    if (!session) {
-      console.error("❌ Nenhuma sessão ativa encontrada");
-      throw new Error("Usuário não autenticado");
-    }
-
-    // Verificar se o token ainda é válido
-    const now = Math.floor(Date.now() / 1000);
-    if (session.expires_at && session.expires_at <= now) {
-      console.log("🔄 Token expirado, tentando renovar...");
-      const { data: refreshData, error: refreshError } =
-        await client.auth.refreshSession();
-
-      if (refreshError) {
-        console.error("❌ Erro ao renovar sessão:", refreshError);
-        throw new Error(`Erro ao renovar sessão: ${refreshError.message}`);
+      if (error) {
+        console.error("❌ Erro ao obter sessão para cliente autenticado:", error);
+        
+        // Retry logic para erros específicos
+        if (retryCount < maxRetries && (
+          error.message.includes('406') ||
+          error.message.includes('timeout') ||
+          error.message.includes('network')
+        )) {
+          retryCount++;
+          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return attemptAuth();
+        }
+        
+        throw new Error(`Erro de autenticação: ${error.message}`);
       }
 
-      if (!refreshData.session) {
-        throw new Error("Falha ao renovar sessão");
+      if (!session) {
+        console.error("❌ Nenhuma sessão ativa encontrada");
+        throw new Error("Usuário não autenticado");
       }
-    }
 
-    console.log("✅ Cliente autenticado configurado com sucesso");
-    return client;
-  } catch (error) {
-    console.error("❌ Erro ao criar cliente autenticado:", error);
-    throw error;
-  }
+      // Verificar se o token ainda é válido
+      const now = Math.floor(Date.now() / 1000);
+      if (session.expires_at && session.expires_at <= now) {
+        try {
+          const { data: refreshData, error: refreshError } =
+            await client.auth.refreshSession();
+
+          if (refreshError) {
+            console.error("❌ Erro ao renovar sessão:", refreshError);
+            
+            // Retry para erros de refresh
+            if (retryCount < maxRetries) {
+              retryCount++;
+              const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 3000);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              return attemptAuth();
+            }
+            
+            throw new Error(`Erro ao renovar sessão: ${refreshError.message}`);
+          }
+
+          if (!refreshData.session) {
+            throw new Error("Falha ao renovar sessão");
+          }
+        } catch (refreshRetryError) {
+          // Se refresh falha após retries, tentar uma vez mais do zero
+          if (retryCount < maxRetries) {
+            retryCount++;
+            return attemptAuth();
+          }
+          throw refreshRetryError;
+        }
+      }
+      return client;
+    } catch (error) {
+      console.error("❌ Erro ao criar cliente autenticado:", error);
+      throw error;
+    }
+  };
+
+  return attemptAuth();
 }
 
-// Helper function for authenticated database operations
+// Helper function for authenticated database operations with retry logic
 export async function withAuthenticatedSupabase<T>(
   operation: (client: ReturnType<typeof createClient>) => Promise<T>,
+  options?: {
+    maxRetries?: number;
+    retryDelay?: number;
+    timeoutMs?: number;
+  }
 ): Promise<T> {
-  const client = await createAuthenticatedClient();
-  return await operation(client);
+  const {
+    maxRetries = 3,
+    retryDelay = 1000,
+    timeoutMs = isMobile() ? 10000 : 8000
+  } = options || {};
+  
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const client = await createAuthenticatedClient();
+      
+      // Aplicar timeout na operação
+      const operationPromise = operation(client);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs}ms`)), timeoutMs);
+      });
+      
+      const result = await Promise.race([operationPromise, timeoutPromise]);
+      return result;
+    } catch (error: any) {
+      lastError = error;
+      const isRetryable = (
+        error.message?.includes('406') ||
+        error.message?.includes('timeout') ||
+        error.message?.includes('network') ||
+        error.message?.includes('ECONNRESET') ||
+        error.message?.includes('fetch')
+      );
+      
+      if (attempt < maxRetries && isRetryable) {
+        const delay = retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        console.error(`❌ Operação falhou após ${attempt} tentativas:`, error);
+        break;
+      }
+    }
+  }
+  
+  throw lastError || new Error('Operação falhou após múltiplas tentativas');
 }
 
-// Helper to get current user with validation
+// Helper to get current user with validation and retry
 export async function getCurrentAuthenticatedUser() {
-  const client = await createAuthenticatedClient();
+  return withAuthenticatedSupabase(async (client) => {
+    const {
+      data: { user },
+      error,
+    } = await client.auth.getUser();
 
-  const {
-    data: { user },
-    error,
-  } = await client.auth.getUser();
+    if (error) {
+      console.error("❌ Erro ao obter usuário atual:", error);
+      throw new Error(`Erro ao obter usuário: ${error.message}`);
+    }
 
-  if (error) {
-    console.error("❌ Erro ao obter usuário atual:", error);
-    throw new Error(`Erro ao obter usuário: ${error.message}`);
-  }
+    if (!user) {
+      throw new Error("Usuário não encontrado");
+    }
 
-  if (!user) {
-    throw new Error("Usuário não encontrado");
-  }
-
-  return user;
+    return user;
+  }, {
+    maxRetries: 2,
+    retryDelay: 500,
+    timeoutMs: 5000
+  });
 }
 
 export type Database = {

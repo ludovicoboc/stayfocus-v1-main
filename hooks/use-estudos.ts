@@ -18,26 +18,28 @@ export function useEstudos() {
     }
   }, [user])
 
+  // NOVA IMPLEMENTAÇÃO: Usar view frontend para compatibilidade
   const fetchSessoes = async () => {
     if (!user) return
 
     try {
       setLoading(true)
+      // Usar view frontend que mapeia automaticamente subject->disciplina, topic->topico
       const { data, error } = await supabase
-        .from("study_sessions")
-        .select(
-          "id, user_id, competition_id, subject, topic, duration_minutes, completed, pomodoro_cycles, notes, started_at, completed_at, created_at, updated_at"
-        )
+        .from("v_study_sessions_frontend")
+        .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
       if (error) throw error
+      
+      // Não é mais necessário mapear campos - a view já retorna no formato correto
       const mapped: SessaoEstudo[] = (data || []).map((s: any) => ({
         id: s.id,
         user_id: s.user_id,
         competition_id: s.competition_id,
-        disciplina: s.subject,
-        topico: s.topic,
+        disciplina: s.disciplina, // Já mapeado pela view
+        topico: s.topico,         // Já mapeado pela view
         duration_minutes: s.duration_minutes,
         completed: s.completed,
         pomodoro_cycles: s.pomodoro_cycles,
@@ -55,6 +57,7 @@ export function useEstudos() {
     }
   }
 
+  // NOVA IMPLEMENTAÇÃO: Usar função otimizada insert_study_session_frontend
   const adicionarSessao = async (sessao: Omit<SessaoEstudo, "id" | "user_id" | "created_at" | "updated_at">) => {
     if (!user) return null
 
@@ -71,98 +74,53 @@ export function useEstudos() {
       // Validar dados antes de enviar
       validateData(sessaoSanitizada, validateSessaoEstudo)
 
-      const { data, error } = await supabase
-        .from("study_sessions")
-        .insert({
-          user_id: user.id,
-          subject: sessaoSanitizada.disciplina,
-          topic: sessaoSanitizada.topico,
-          duration_minutes: sessaoSanitizada.duration_minutes,
-          completed: false,
-          pomodoro_cycles: sessaoSanitizada.pomodoro_cycles,
-          notes: sessaoSanitizada.notes,
-          competition_id: sessaoSanitizada.competition_id,
-          started_at: new Date().toISOString(),
-          completed_at: null,
-        })
-        .select(
-          "id, user_id, competition_id, subject, topic, duration_minutes, completed, pomodoro_cycles, notes, started_at, completed_at, created_at, updated_at"
-        )
-        .single()
+      // Usar função otimizada do banco que aceita campos frontend
+      const { data, error } = await supabase.rpc('insert_study_session_frontend', {
+        p_user_id: user.id,
+        p_disciplina: sessaoSanitizada.disciplina,
+        p_duration_minutes: sessaoSanitizada.duration_minutes,
+        p_competition_id: sessaoSanitizada.competition_id || null,
+        p_topico: sessaoSanitizada.topico || null,
+        p_notes: sessaoSanitizada.notes || null
+      })
 
       if (error) throw error
 
-      const mapped: SessaoEstudo = {
-        id: data.id,
-        user_id: data.user_id,
-        competition_id: data.competition_id,
-        disciplina: data.subject,
-        topico: data.topic,
-        duration_minutes: data.duration_minutes,
-        completed: data.completed,
-        pomodoro_cycles: data.pomodoro_cycles,
-        notes: data.notes,
-        started_at: data.started_at,
-        completed_at: data.completed_at,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      }
-
-      setSessoes([mapped, ...sessoes])
-      return mapped
+      // Recarregar sessões para obter a nova sessão com todos os campos
+      await fetchSessoes()
+      
+      return data // UUID da nova sessão
     } catch (error) {
       console.error("Error adding study session:", error)
       return null
     }
   }
 
+  // NOVA IMPLEMENTAÇÃO: Usar função otimizada update_study_session_frontend
   const atualizarSessao = async (id: string, updates: Partial<SessaoEstudo>) => {
     if (!user) return false
 
     try {
-      // Map frontend fields to DB columns
-      const dbUpdates: any = {
-        updated_at: new Date().toISOString(),
-      }
-      if (updates.disciplina !== undefined) dbUpdates.subject = sanitizeString(updates.disciplina)
-      if (updates.topico !== undefined) dbUpdates.topic = sanitizeString(updates.topico)
-      if (updates.duration_minutes !== undefined)
-        dbUpdates.duration_minutes = sanitizeNumber(updates.duration_minutes)
-      if (updates.notes !== undefined) dbUpdates.notes = updates.notes ? sanitizeString(updates.notes) : null
-      if (updates.competition_id !== undefined) dbUpdates.competition_id = updates.competition_id
-      if (updates.completed !== undefined) dbUpdates.completed = updates.completed
-      if (updates.pomodoro_cycles !== undefined)
-        dbUpdates.pomodoro_cycles = sanitizeNumber(updates.pomodoro_cycles)
+      // Preparar updates com campos frontend
+      const frontendUpdates: any = {}
+      if (updates.disciplina !== undefined) frontendUpdates.p_disciplina = sanitizeString(updates.disciplina)
+      if (updates.topico !== undefined) frontendUpdates.p_topico = sanitizeString(updates.topico)
+      if (updates.duration_minutes !== undefined) frontendUpdates.p_duration_minutes = sanitizeNumber(updates.duration_minutes)
+      if (updates.notes !== undefined) frontendUpdates.p_notes = updates.notes ? sanitizeString(updates.notes) : null
+      if (updates.completed !== undefined) frontendUpdates.p_completed = updates.completed
+      if (updates.pomodoro_cycles !== undefined) frontendUpdates.p_pomodoro_cycles = sanitizeNumber(updates.pomodoro_cycles)
 
-      const { data, error } = await supabase
-        .from("study_sessions")
-        .update(dbUpdates)
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .select(
-          "id, user_id, competition_id, subject, topic, duration_minutes, completed, pomodoro_cycles, notes, started_at, completed_at, created_at, updated_at"
-        )
-        .single()
+      // Usar função otimizada do banco
+      const { data, error } = await supabase.rpc('update_study_session_frontend', {
+        p_session_id: id,
+        p_user_id: user.id,
+        ...frontendUpdates
+      })
 
       if (error) throw error
 
-      const mapped: SessaoEstudo = {
-        id: data.id,
-        user_id: data.user_id,
-        competition_id: data.competition_id,
-        disciplina: data.subject,
-        topico: data.topic,
-        duration_minutes: data.duration_minutes,
-        completed: data.completed,
-        pomodoro_cycles: data.pomodoro_cycles,
-        notes: data.notes,
-        started_at: data.started_at,
-        completed_at: data.completed_at,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      }
-
-      setSessoes(sessoes.map((s) => (s.id === id ? mapped : s)))
+      // Recarregar sessões para obter dados atualizados
+      await fetchSessoes()
       return true
     } catch (error) {
       console.error("Error updating study session:", error)
@@ -193,7 +151,38 @@ export function useEstudos() {
     }
   }
 
-  // Estatísticas
+  // NOVA IMPLEMENTAÇÃO: Usar função otimizada de estatísticas do banco
+  const getEstatisticasOtimizadas = async () => {
+    if (!user) return null
+    
+    try {
+      const { data, error } = await supabase.rpc('get_study_statistics_frontend', {
+        p_user_id: user.id
+      })
+      
+      if (error) throw error
+      
+      if (data && data.length > 0) {
+        const stats = data[0]
+        return {
+          sessoesCompletas: stats.completed_sessions,
+          totalSessoes: stats.total_sessions,
+          tempoTotalMinutos: stats.total_study_time,
+          ciclosPomodoro: stats.total_pomodoro_cycles,
+          tempoMedioSessao: stats.avg_session_duration,
+          disciplinasEstudadas: stats.disciplinas_studied || [],
+          tempoTotalFormatado: formatarTempo(stats.total_study_time)
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.error("Error fetching optimized statistics:", error)
+      return null
+    }
+  }
+
+  // Estatísticas locais (fallback)
   const getEstatisticas = () => {
     const sessoesCompletas = sessoes.filter((s) => s.completed).length
     const totalSessoes = sessoes.length
@@ -223,6 +212,7 @@ export function useEstudos() {
     marcarSessaoCompleta,
     removerSessao,
     getEstatisticas,
+    getEstatisticasOtimizadas, // Nova função otimizada
     refetch: fetchSessoes,
   }
 }

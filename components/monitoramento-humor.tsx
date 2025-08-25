@@ -29,6 +29,9 @@ import { ptBR } from "date-fns/locale";
 import type { NovoRegistroHumor } from "@/types/saude";
 import { getCurrentDateString } from "@/lib/utils";
 
+// Export default para lazy loading
+export default MonitoramentoHumor;
+
 export function MonitoramentoHumor({ date }: { date?: string }) {
   const [currentDate, setCurrentDate] = useState<string>(
     date || getCurrentDateString(),

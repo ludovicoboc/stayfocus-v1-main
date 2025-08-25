@@ -26,6 +26,11 @@ export function DateNavigation({
   const [currentDate, setCurrentDate] = useState<string>(
     date || getCurrentDateString(),
   );
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const shiftDate = (base: string, delta: number) => {
     const d = new Date(base + "T00:00:00Z");
@@ -69,6 +74,53 @@ export function DateNavigation({
       handleDateChange(newDate);
     }
   };
+
+  // Durante o pre-rendering, renderizar sem event handlers
+  if (!mounted) {
+    return (
+      <div className={`flex items-center justify-between gap-2 ${className}`}>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Ontem
+          </Button>
+
+          <div className="flex items-center gap-2">
+            {title && (
+              <span className="text-lg font-semibold text-white">{title} •</span>
+            )}
+            <span className="text-lg font-semibold text-white">
+              {formatDisplayDate(currentDate)}
+            </span>
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+          >
+            Amanhã
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
+        </div>
+
+        {showDatePicker && (
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-slate-400" />
+            <Input
+              type="date"
+              value={currentDate}
+              className="bg-slate-800 border-slate-600 text-white w-40"
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`flex items-center justify-between gap-2 ${className}`}>

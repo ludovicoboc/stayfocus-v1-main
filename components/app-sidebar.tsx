@@ -232,3 +232,5 @@ export const AppSidebar = memo(({ onClose, isOpen }: SidebarProps) => {
 })
 
 AppSidebar.displayName = "AppSidebar"
+
+export default AppSidebar

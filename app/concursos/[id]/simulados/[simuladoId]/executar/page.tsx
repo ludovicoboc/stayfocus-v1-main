@@ -44,7 +44,7 @@ interface SimulationAttempt {
 }
 
 export default function ExecutarSimuladoPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
@@ -67,10 +67,10 @@ export default function ExecutarSimuladoPage() {
 
   // Load simulation and questions
   useEffect(() => {
-    if (!isAuthenticated || !simuladoId) return;
+    if (!user || !simuladoId) return;
 
     loadSimulation();
-  }, [isAuthenticated, simuladoId]);
+  }, [user, simuladoId]);
 
   // Timer effect
   useEffect(() => {

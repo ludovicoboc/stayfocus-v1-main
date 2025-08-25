@@ -29,17 +29,21 @@ import { LoadingScreen } from "@/components/loading-screen"
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const { 
-    dashboardData, 
+    painelDia,
+    prioridades,
+    medicamentos,
+    sessaoFoco,
+    summary,
     loading, 
     error, 
-    adicionarAtividadePainelDia,
+    adicionarAtividade: adicionarAtividadePainelDia,
     toggleAtividadeConcluida,
     adicionarPrioridade,
     togglePrioridadeConcluida,
     iniciarSessaoFoco,
     pausarSessaoFoco,
     pararSessaoFoco,
-    recarregarDados,
+    refetch: recarregarDados,
     limparErro
   } = useDashboard()
 
@@ -176,9 +180,9 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {dashboardData?.medicamentos && dashboardData.medicamentos.length > 0 ? (
+                {medicamentos && medicamentos.length > 0 ? (
                   <div className="space-y-2">
-                    {dashboardData.medicamentos.slice(0, 3).map((medicamento) => (
+                    {medicamentos.slice(0, 3).map((medicamento) => (
                       <div
                         key={medicamento.id}
                         className="flex items-center justify-between p-2 rounded-lg bg-slate-700"

@@ -1,97 +1,154 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, CheckCircle, Circle, Clock, Edit, Trash2 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Plus, Clock, BookOpen, CheckCircle, Circle, Edit2, Trash2 } from "lucide-react"
 import { useEstudos } from "@/hooks/use-estudos"
 import { useConcursos } from "@/hooks/use-concursos"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { SessaoEstudo } from "@/types/estudos"
+import { toast } from "sonner"
+
+interface SessaoEstudo {
+  id: string
+  disciplina: string
+  topico?: string
+  duration_minutes: number
+  competition_id?: string
+  notes?: string
+  completed: boolean
+  created_at: string
+}
+
+interface NovaSessao {
+  disciplina: string
+  topico: string
+  duration_minutes: number
+  competition_id: string | null
+  notes: string
+}
 
 export function RegistroEstudos() {
-  const { sessoes, adicionarSessao, atualizarSessao, marcarSessaoCompleta, removerSessao, getEstatisticas } = useEstudos()
+  const { sessoes, adicionarSessao, atualizarSessao, removerSessao, marcarSessaoCompleta, getEstatisticas } = useEstudos()
   const { concursos } = useConcursos()
+  
+  // Obter estatísticas locais
+  const estatisticas = getEstatisticas()
+
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [sessaoEditando, setSessaoEditando] = useState<SessaoEstudo | null>(null)
-  const [novaSessao, setNovaSessao] = useState({
+
+  const [novaSessao, setNovaSessao] = useState<NovaSessao>({
     disciplina: "",
     topico: "",
     duration_minutes: 25,
-    notes: "",
-    competition_id: null as string | null,
+    competition_id: null,
+    notes: ""
   })
 
-  const estatisticas = getEstatisticas()
-
-  const handleAddSessao = async () => {
-    if (!novaSessao.disciplina.trim()) return
-
-    const sessao: Omit<SessaoEstudo, "id" | "user_id" | "created_at" | "updated_at"> = {
-      disciplina: novaSessao.disciplina.trim(),
-      topico: novaSessao.topico.trim() || null,
-      duration_minutes: novaSessao.duration_minutes,
-      completed: false,
-      pomodoro_cycles: 0,
-      notes: novaSessao.notes.trim() || null,
-      competition_id: novaSessao.competition_id,
-      started_at: new Date().toISOString(),
-      completed_at: null,
-    }
-
-    const result = await adicionarSessao(sessao)
-    if (result) {
-      setShowAddModal(false)
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!showAddModal) {
       setNovaSessao({
         disciplina: "",
         topico: "",
         duration_minutes: 25,
-        notes: "",
         competition_id: null,
+        notes: ""
       })
+    }
+  }, [showAddModal])
+
+  const resetForm = () => {
+    setNovaSessao({
+      disciplina: "",
+      topico: "",
+      duration_minutes: 25,
+      competition_id: null,
+      notes: ""
+    })
+  }
+
+  const handleAddSessao = async () => {
+    if (!novaSessao.disciplina.trim()) {
+      toast.error("Por favor, informe a matéria")
+      return
+    }
+
+    try {
+      await adicionarSessao({
+        disciplina: novaSessao.disciplina.trim(),
+        topico: novaSessao.topico.trim() || undefined,
+        duration_minutes: novaSessao.duration_minutes,
+        competition_id: novaSessao.competition_id || undefined,
+        notes: novaSessao.notes.trim() || undefined,
+        completed: false,
+        pomodoro_cycles: 0
+      })
+      
+      setShowAddModal(false)
+      resetForm()
+      toast.success("Sessão de estudo adicionada!")
+    } catch (error) {
+      toast.error("Erro ao adicionar sessão de estudo")
     }
   }
 
   const handleEditSessao = (sessao: SessaoEstudo) => {
-    setSessaoEditando(sessao)
+    setSessaoEditando({ ...sessao })
     setShowEditModal(true)
   }
 
   const handleUpdateSessao = async () => {
-    if (!sessaoEditando?.id || !sessaoEditando.disciplina.trim()) return
-
-    const updates = {
-      disciplina: sessaoEditando.disciplina.trim(),
-      topico: sessaoEditando.topico?.trim() || null,
-      duration_minutes: sessaoEditando.duration_minutes,
-      notes: sessaoEditando.notes?.trim() || null,
-      competition_id: sessaoEditando.competition_id,
+    if (!sessaoEditando || !sessaoEditando.disciplina.trim()) {
+      toast.error("Por favor, informe a matéria")
+      return
     }
 
-    const result = await atualizarSessao(sessaoEditando.id, updates)
-    if (result) {
+    try {
+      await atualizarSessao(sessaoEditando.id!, {
+        disciplina: sessaoEditando.disciplina.trim(),
+        topico: sessaoEditando.topico?.trim() || undefined,
+        duration_minutes: sessaoEditando.duration_minutes,
+        competition_id: sessaoEditando.competition_id || undefined,
+        notes: sessaoEditando.notes?.trim() || undefined
+      })
+      
       setShowEditModal(false)
       setSessaoEditando(null)
+      toast.success("Sessão atualizada!")
+    } catch (error) {
+      toast.error("Erro ao atualizar sessão")
     }
-  }
-
-  const handleCancelEdit = () => {
-    setShowEditModal(false)
-    setSessaoEditando(null)
   }
 
   const handleToggleComplete = async (sessao: SessaoEstudo) => {
-    if (!sessao.id) return
-
-    if (!sessao.completed) {
-      await marcarSessaoCompleta(sessao.id)
+    try {
+      await marcarSessaoCompleta(sessao.id!)
+    } catch (error) {
+      toast.error("Erro ao atualizar status da sessão")
     }
   }
+
+  const formatarEstatisticas = () => {
+    const sessoesCompletas = estatisticas?.sessoesCompletas || 0
+    const tempoTotal = estatisticas?.tempoTotalMinutos || 0
+    const tempoHoras = Math.floor(tempoTotal / 60)
+    const tempoMinutos = tempoTotal % 60
+
+    return {
+      sessoesCount: sessoesCompletas.toString(),
+      tempoTotal: tempoHoras > 0 ? `${tempoHoras}h ${tempoMinutos}m` : `${tempoMinutos}m`
+    }
+  }
+
+  const estatisticasFormatadas = formatarEstatisticas()
 
   return (
     <>
@@ -102,15 +159,13 @@ export function RegistroEstudos() {
         <CardContent className="space-y-4">
           {/* Statistics Cards */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-orange-800 rounded-lg p-3">
-              <div className="text-orange-100 text-sm">Sessões Completas</div>
-              <div className="text-orange-100 text-lg font-bold">
-                {estatisticas.sessoesCompletas}/{estatisticas.totalSessoes}
-              </div>
+            <div className="bg-slate-700 p-3 rounded-lg">
+              <div className="text-sm text-slate-400">Sessões Completas</div>
+              <div className="text-lg font-semibold text-white">{estatisticasFormatadas.sessoesCount}</div>
             </div>
-            <div className="bg-orange-800 rounded-lg p-3">
-              <div className="text-orange-100 text-sm">Tempo Total</div>
-              <div className="text-orange-100 text-lg font-bold">{estatisticas.tempoTotalFormatado}</div>
+            <div className="bg-slate-700 p-3 rounded-lg">
+              <div className="text-sm text-slate-400">Tempo Total</div>
+              <div className="text-lg font-semibold text-white">{estatisticasFormatadas.tempoTotal}</div>
             </div>
           </div>
 
@@ -119,47 +174,55 @@ export function RegistroEstudos() {
             {sessoes.slice(0, 5).map((sessao) => (
               <div
                 key={sessao.id}
-                className="flex items-center justify-between p-3 bg-slate-700 rounded-lg hover:bg-slate-650 transition-colors"
+                className="flex items-center justify-between p-3 bg-slate-700 rounded-lg border border-slate-600"
               >
                 <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => handleToggleComplete(sessao)}
-                    className="text-green-400 hover:text-green-300"
-                    disabled={sessao.completed}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => sessao.id && handleToggleComplete(sessao as SessaoEstudo & { id: string })}
+                    className="p-0 h-auto"
                   >
-                    {sessao.completed ? <CheckCircle className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-                  </button>
+                    {sessao.completed ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-slate-400" />
+                    )}
+                  </Button>
                   <div className="flex-1">
-                    <div
-                      className={`text-sm font-medium ${sessao.completed ? "text-slate-400 line-through" : "text-white"}`}
-                    >
-                      {sessao.disciplina}
-                      {sessao.topico && ` - ${sessao.topico}`}
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-medium">{sessao.disciplina}</span>
+                      {sessao.topico && (
+                        <Badge variant="secondary" className="text-xs">
+                          {sessao.topico}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="text-xs text-slate-400 flex items-center">
-                      <Clock className="w-3 h-3 mr-1" />
-                      {sessao.duration_minutes} min
-                      {sessao.pomodoro_cycles > 0 && ` • ${sessao.pomodoro_cycles} ciclos`}
+                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                      <Clock className="h-3 w-3" />
+                      {sessao.duration_minutes}min
+                      {sessao.created_at && (
+                        <span>• {new Date(sessao.created_at).toLocaleDateString()}</span>
+                      )}
                     </div>
                   </div>
                 </div>
-                <div className="flex space-x-1">
+                <div className="flex items-center gap-1">
                   <Button
-                    size="sm"
                     variant="ghost"
-                    className="text-slate-400 hover:text-white"
-                    onClick={() => handleEditSessao(sessao)}
-                    disabled={sessao.completed}
+                    size="sm"
+                    onClick={() => sessao.id && handleEditSessao(sessao as SessaoEstudo & { id: string })}
+                    className="h-8 w-8 p-0"
                   >
-                    <Edit className="w-4 h-4" />
+                    <Edit2 className="h-4 w-4" />
                   </Button>
                   <Button
-                    size="sm"
                     variant="ghost"
-                    className="text-slate-400 hover:text-red-400"
-                    onClick={() => sessao.id && removerSessao(sessao.id)}
+                    size="sm"
+                    onClick={() => removerSessao(sessao.id!)}
+                    className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -220,7 +283,7 @@ export function RegistroEstudos() {
                 type="number"
                 value={novaSessao.duration_minutes}
                 onChange={(e) =>
-                  setNovaSessao({ ...novaSessao, duration_minutes: Number.parseInt(e.target.value) || 25 })
+                  setNovaSessao({ ...novaSessao, duration_minutes: parseInt(e.target.value) || 25 })
                 }
                 className="bg-slate-700 border-slate-600 text-white"
                 min="1"
@@ -335,7 +398,7 @@ export function RegistroEstudos() {
                 type="number"
                 value={sessaoEditando?.duration_minutes || 25}
                 onChange={(e) => setSessaoEditando(prev => 
-                  prev ? { ...prev, duration_minutes: Number.parseInt(e.target.value) || 25 } : null
+                  prev ? { ...prev, duration_minutes: parseInt(e.target.value) || 25 } : null
                 )}
                 className="bg-slate-700 border-slate-600 text-white"
                 min="1"
@@ -350,7 +413,7 @@ export function RegistroEstudos() {
               <Select
                 value={sessaoEditando?.competition_id || "none"}
                 onValueChange={(value) => setSessaoEditando(prev => 
-                  prev ? { ...prev, competition_id: value === "none" ? null : value } : null
+                  prev ? { ...prev, competition_id: value === "none" ? undefined : value } : null
                 )}
               >
                 <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
@@ -389,14 +452,14 @@ export function RegistroEstudos() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={handleCancelEdit}
+              onClick={() => setShowEditModal(false)}
               className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleUpdateSessao}
-              disabled={!sessaoEditando?.disciplina?.trim()}
+              disabled={!sessaoEditando?.disciplina.trim()}
               className="bg-blue-600 hover:bg-blue-700"
             >
               Salvar Alterações
@@ -407,3 +470,6 @@ export function RegistroEstudos() {
     </>
   )
 }
+
+// Export default para lazy loading
+export default RegistroEstudos

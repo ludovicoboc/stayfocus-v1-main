@@ -1,0 +1,314 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { createClient } from "@/lib/supabase";
+import { optimizedAuthCache } from "@/lib/auth-cache";
+import { createDebouncedAuthCheck } from "@/lib/request-debouncer";
+import { validateAuthState, onAuthStateChange } from "@/lib/auth-utils";
+import type { User, Session } from "@supabase/supabase-js";
+
+// Configuração de otimização
+const INIT_TIMEOUT = 8000; // 8 segundos timeout para inicialização
+const DEBOUNCE_KEY = "useAuth_validation";
+
+export function useAuth() {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+  const initializationRef = useRef<boolean>(false);
+  const supabase = createClient();
+
+  // Criar função debounced para validação de autenticação
+  const debouncedAuthValidation = useCallback(
+    createDebouncedAuthCheck(
+      DEBOUNCE_KEY,
+      async (forceRefresh = false) => {
+        console.log(`🔐 [USE-AUTH] Executando validação ${forceRefresh ? 'forçada' : 'cached'}`);
+        
+        return await optimizedAuthCache.validateWithOptimizations(
+          'auth_validation',
+          async () => {
+            const { user: validatedUser, error } = await validateAuthState(forceRefresh);
+            
+            if (error) {
+              console.log("ℹ️ [USE-AUTH] Usuário não autenticado:", error);
+              return {
+                user: null,
+                session: null,
+                timestamp: Date.now(),
+                expiry: Date.now(),
+                isValid: false,
+                source: 'fresh' as const
+              };
+            }
+            
+            const cached = optimizedAuthCache.getCachedAuth();
+            return {
+              user: validatedUser,
+              session: cached?.session || null,
+              timestamp: Date.now(),
+              expiry: Date.now() + (5 * 60 * 1000),
+              isValid: !!validatedUser,
+              source: 'fresh' as const
+            };
+          },
+          { forceRefresh }
+        );
+      }
+    ),
+    []
+  );
+
+  // Função para inicializar autenticação simplificada
+  const initializeAuth = useCallback(async () => {
+    // Evitar múltiplas inicializações
+    if (initializationRef.current) {
+      return;
+    }
+    
+    initializationRef.current = true;
+    console.log("🔐 [USE-AUTH] Iniciando inicialização...");
+    
+    try {
+      // Validação direta sem debounce para inicialização
+      const { user: validatedUser, error } = await validateAuthState(false);
+      
+      if (error) {
+        console.log("ℹ️ [USE-AUTH] Usuário não autenticado");
+        setUser(null);
+        setSession(null);
+      } else {
+        console.log("✅ [USE-AUTH] Usuário autenticado");
+        const cached = optimizedAuthCache.getCachedAuth();
+        setUser(validatedUser);
+        setSession(cached?.session || null);
+      }
+    } catch (error) {
+      console.error("❌ [USE-AUTH] Erro na inicialização:", error);
+      setUser(null);
+      setSession(null);
+    } finally {
+      setLoading(false);
+      setInitialized(true);
+      initializationRef.current = false;
+    }
+  }, []);  // Sem dependências para evitar re-criação
+
+  // Efeito de inicialização - executado apenas uma vez
+  useEffect(() => {
+    initializeAuth();
+  }, []); // Executar apenas na montagem
+
+  // Efeito para configurar listener após inicialização
+  useEffect(() => {
+    if (!initialized) return;
+
+    const unsubscribe = onAuthStateChange((authUser) => {
+      console.log("🔄 [USE-AUTH] Auth state changed:", {
+        hasUser: !!authUser,
+        userId: authUser?.id?.substring(0, 8) + "..." || "none"
+      });
+      
+      setUser(authUser);
+      const currentCache = optimizedAuthCache.getCachedAuth();
+      setSession(currentCache?.session || null);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [initialized]); // Apenas quando initialized mudar
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      console.log("🔐 [USE-AUTH] Tentando fazer login para:", email);
+      setLoading(true);
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error("❌ [USE-AUTH] Erro no login:", error.message);
+        throw error;
+      }
+
+      console.log("✅ [USE-AUTH] Login realizado com sucesso:", {
+        userId: data.user?.id?.substring(0, 8) + "...",
+        email: data.user?.email,
+      });
+
+      // Atualizar cache com nova sessão
+      if (data.user && data.session) {
+        optimizedAuthCache.setCachedAuth(data.user, data.session, 'fresh');
+      }
+
+      return data;
+    } catch (error) {
+      console.error("❌ [USE-AUTH] Erro ao fazer login:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUp = async (email: string, password: string) => {
+    try {
+      console.log("📝 [USE-AUTH] Tentando criar conta para:", email);
+      setLoading(true);
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error("❌ [USE-AUTH] Erro na criação de conta:", error.message);
+        throw error;
+      }
+
+      console.log("✅ [USE-AUTH] Conta criada com sucesso:", {
+        userId: data.user?.id?.substring(0, 8) + "...",
+        email: data.user?.email,
+        needsConfirmation: !data.session,
+      });
+
+      // Atualizar cache se há sessão
+      if (data.user && data.session) {
+        optimizedAuthCache.setCachedAuth(data.user, data.session, 'fresh');
+      }
+
+      return data;
+    } catch (error) {
+      console.error("❌ [USE-AUTH] Erro ao criar conta:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      console.log("👋 [USE-AUTH] Fazendo logout...");
+      setLoading(true);
+
+      const { error } = await supabase.auth.signOut();
+      
+      // Limpar cache independentemente do resultado
+      optimizedAuthCache.clearCache();
+      
+      // Cancelar validações pendentes
+      if (debouncedAuthValidation.cancel) {
+        debouncedAuthValidation.cancel();
+      }
+      
+      if (error) {
+        console.error("❌ [USE-AUTH] Erro no logout:", error.message);
+        throw error;
+      }
+
+      console.log("✅ [USE-AUTH] Logout realizado com sucesso");
+      setUser(null);
+      setSession(null);
+    } catch (error) {
+      console.error("❌ [USE-AUTH] Erro ao fazer logout:", error);
+      // Limpar estado local mesmo em caso de erro
+      setUser(null);
+      setSession(null);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshSession = async () => {
+    try {
+      console.log("🔄 [USE-AUTH] Renovando sessão...");
+      const { data, error } = await supabase.auth.refreshSession();
+
+      if (error) {
+        console.error("❌ [USE-AUTH] Erro ao renovar sessão:", error.message);
+        optimizedAuthCache.clearCache();
+        throw error;
+      }
+
+      if (data.session?.user) {
+        // Atualizar cache com nova sessão
+        optimizedAuthCache.setCachedAuth(data.session.user, data.session, 'fresh');
+        setUser(data.session.user);
+        setSession(data.session);
+        
+        console.log("✅ [USE-AUTH] Sessão renovada com sucesso:", {
+          userId: data.session.user.id?.substring(0, 8) + "..."
+        });
+      }
+
+      return data;
+    } catch (error) {
+      console.error("❌ [USE-AUTH] Erro ao renovar sessão:", error);
+      throw error;
+    }
+  };
+
+  // Função para forçar re-validação (útil para debugging)
+  const forceRefreshAuth = useCallback(async () => {
+    console.log("🔄 [USE-AUTH] Forçando refresh da autenticação...");
+    setLoading(true);
+    
+    try {
+      const result = await debouncedAuthValidation(true);
+      
+      if (result && typeof result === 'object') {
+        setUser(result.user);
+        setSession(result.session);
+      } else {
+        setUser(null);
+        setSession(null);
+      }
+    } catch (error) {
+      console.error("❌ [USE-AUTH] Erro no refresh forçado:", error);
+      setUser(null);
+      setSession(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedAuthValidation]);
+
+  // Função para obter métricas de cache (útil para debugging)
+  const getCacheMetrics = useCallback(() => {
+    return optimizedAuthCache.getMetrics();
+  }, []);
+
+  return {
+    // Estado
+    user,
+    session,
+    loading,
+    initialized,
+    
+    // Funções principais
+    signIn,
+    signUp,
+    signOut,
+    refreshSession,
+    
+    // Utilitários
+    isAuthenticated: !!user && !!session,
+    forceRefreshAuth,
+    getCacheMetrics,
+    
+    // Debug info
+    get debugInfo() {
+      return {
+        initialized,
+        loading,
+        hasUser: !!user,
+        hasSession: !!session,
+        cacheMetrics: optimizedAuthCache.getMetrics(),
+        debugInfo: optimizedAuthCache.getDebugInfo()
+      };
+    }
+  };
+}

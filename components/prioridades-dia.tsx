@@ -11,7 +11,7 @@ import { getCurrentDateString } from "@/lib/utils"
 
 export function PrioridadesDia({ date }: { date?: string }) {
   const [currentDate, setCurrentDate] = useState<string>(date || getCurrentDateString())
-  const { dashboardData, adicionarPrioridade, togglePrioridadeConcluida } = useDashboard(currentDate)
+  const { prioridades, adicionarPrioridade, togglePrioridadeConcluida } = useDashboard(currentDate)
   const [novaPrioridade, setNovaPrioridade] = useState({ titulo: "", importante: false })
   const [dialogAberto, setDialogAberto] = useState(false)
 
@@ -37,8 +37,8 @@ export function PrioridadesDia({ date }: { date?: string }) {
     }
   }
 
-  const prioridades = dashboardData?.prioridades || []
-  const prioridadesOrdenadas = prioridades.sort((a, b) => {
+  const prioridadesData = prioridades || []
+  const prioridadesOrdenadas = prioridadesData.sort((a, b) => {
     if (a.importante && !b.importante) return -1
     if (!a.importante && b.importante) return 1
     if (a.concluida && !b.concluida) return 1

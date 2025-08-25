@@ -10,7 +10,7 @@ import { getCurrentDateString } from "@/lib/utils"
 
 export function PainelDia({ date }: { date?: string }) {
   const resolvedDate = date || getCurrentDateString()
-  const { dashboardData, adicionarAtividadePainelDia, toggleAtividadeConcluida } = useDashboard(resolvedDate)
+  const { painelDia, adicionarAtividade, toggleAtividadeConcluida } = useDashboard(resolvedDate)
   const [novaAtividade, setNovaAtividade] = useState({ horario: "", atividade: "", cor: "#3b82f6" })
   const [dialogAberto, setDialogAberto] = useState(false)
 
@@ -18,7 +18,7 @@ export function PainelDia({ date }: { date?: string }) {
     if (!novaAtividade.horario || !novaAtividade.atividade) return
 
     try {
-      await adicionarAtividadePainelDia(novaAtividade)
+      await adicionarAtividade(novaAtividade)
       setNovaAtividade({ horario: "", atividade: "", cor: "#3b82f6" })
       setDialogAberto(false)
     } catch (error) {
@@ -26,7 +26,7 @@ export function PainelDia({ date }: { date?: string }) {
     }
   }
 
-  const atividades = dashboardData?.painelDia || []
+  const atividades = painelDia || []
   const atividadesOrdenadas = atividades.sort((a, b) => a.horario.localeCompare(b.horario))
 
   const cores = [

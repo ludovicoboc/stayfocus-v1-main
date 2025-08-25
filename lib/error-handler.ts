@@ -150,8 +150,6 @@ export function logSupabaseError(operation: string, error: any) {
  */
 export function trackPerformance(operation: string, startTime: number) {
   const duration = Date.now() - startTime;
-  console.log(`📊 ${operation} levou ${duration}ms`);
-
   if (duration > 2000) {
     console.warn(`⚠️ ${operation} está lento: ${duration}ms`);
   }
@@ -223,10 +221,6 @@ export function getErrorMessage(error: any): string {
  */
 export const competitionLogger = {
   info: (message: string, data?: any) => {
-    console.log(
-      `🏆 [CONCURSOS] ${message}`,
-      data ? { ...data, timestamp: new Date().toISOString() } : "",
-    );
   },
 
   error: (message: string, error?: any, data?: any) => {
@@ -248,9 +242,5 @@ export const competitionLogger = {
   },
 
   success: (message: string, data?: any) => {
-    console.log(
-      `✅ [CONCURSOS] ${message}`,
-      data ? { ...data, timestamp: new Date().toISOString() } : "",
-    );
   },
 };

@@ -52,8 +52,6 @@ export function ProximoConcurso() {
     }
   }
 
-
-
   if (loading) {
     return (
       <Card className="bg-slate-800 border-slate-700">

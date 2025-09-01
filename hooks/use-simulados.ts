@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-provider"
 import { useConcursos } from "@/hooks/use-concursos"
+import { createHistoryTracker } from "@/lib/history-integration"
 import type { Simulado, SimuladoData, SimuladoResultado, SimuladoStatus } from "@/types/simulados"
 
 export function useSimulados() {
@@ -280,7 +281,7 @@ export function useSimulados() {
 
       if (updateError) throw updateError
 
-      // Add to history
+      // Add to history (legacy table)
       const { error: historyError } = await supabase.from("simulation_history").insert({
         user_id: user.id,
         simulation_id: simuladoAtual.id,
@@ -291,6 +292,22 @@ export function useSimulados() {
       })
 
       if (historyError) throw historyError
+
+      // Add to unified history system
+      try {
+        const historyTracker = createHistoryTracker(user.id)
+        await historyTracker.trackSimulationCompletion({
+          simulation_title: simuladoAtual.title,
+          score,
+          total_questions: simuladoAtual.total_questions,
+          subject: simuladoAtual.metadata.concurso,
+          simulation_id: simuladoAtual.id,
+          answers: simuladoAtual.user_answers
+        })
+      } catch (historyTrackingError) {
+        console.error("Error tracking in unified history:", historyTrackingError)
+        // Don't fail the whole operation if history tracking fails
+      }
 
       setSimuladoAtual({
         ...simuladoAtual,

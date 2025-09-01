@@ -13,6 +13,7 @@ import {
   Trophy,
   Brain,
   Target,
+  History,
 } from "lucide-react"
 
 export const NAVIGATION_ITEMS = [
@@ -85,6 +86,12 @@ export const NAVIGATION_ITEMS = [
 ] as const
 
 export const SECONDARY_NAVIGATION_ITEMS = [
+  {
+    title: "Histórico",
+    url: "/historico",
+    icon: History,
+    description: "Histórico completo de atividades",
+  },
   {
     title: "Perfil",
     url: "/perfil",

@@ -627,11 +627,69 @@ export function validateAtividadeLazer(atividade: any): ValidationResult {
   ]);
 }
 
+// Validação para opções de questões
+export function validateQuestionOptions(options: any): ValidationResult {
+  const validator = new DataValidator();
+  
+  if (!Array.isArray(options)) {
+    return {
+      isValid: false,
+      errors: ["Opções devem ser uma lista"]
+    };
+  }
+  
+  if (options.length === 0) {
+    return {
+      isValid: false,
+      errors: ["Deve haver pelo menos uma opção"]
+    };
+  }
+  
+  const errors: string[] = [];
+  let hasCorrectAnswer = false;
+  let correctAnswersCount = 0;
+  
+  options.forEach((option, index) => {
+    // Validar estrutura da opção
+    if (!option || typeof option !== 'object') {
+      errors.push(`Opção ${index + 1}: deve ser um objeto válido`);
+      return;
+    }
+    
+    // Validar texto da opção
+    if (!option.text || typeof option.text !== 'string' || option.text.trim() === '') {
+      errors.push(`Opção ${index + 1}: texto é obrigatório e deve ser uma string não vazia`);
+    } else if (option.text.length > 500) {
+      errors.push(`Opção ${index + 1}: texto deve ter no máximo 500 caracteres`);
+    }
+    
+    // Validar indicador de resposta correta
+    if (typeof option.isCorrect !== 'boolean') {
+      errors.push(`Opção ${index + 1}: isCorrect deve ser verdadeiro ou falso`);
+    } else if (option.isCorrect) {
+      hasCorrectAnswer = true;
+      correctAnswersCount++;
+    }
+  });
+  
+  // Validar que há exatamente uma resposta correta
+  if (!hasCorrectAnswer) {
+    errors.push("Deve haver pelo menos uma resposta correta");
+  } else if (correctAnswersCount > 1) {
+    errors.push("Deve haver apenas uma resposta correta");
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
 // Validação para questões de concurso
 export function validateQuestao(questao: any): ValidationResult {
   const validator = new DataValidator();
 
-  return validator.validateFields([
+  const baseValidation = validator.validateFields([
     {
       field: "Texto da questão",
       value: questao.question_text,
@@ -668,6 +726,77 @@ export function validateQuestao(questao: any): ValidationResult {
       rules: ["required", "uuid"],
     },
   ]);
+  
+  // Se a validação base falhou, retornar os erros
+  if (!baseValidation.isValid) {
+    return baseValidation;
+  }
+  
+  // Validação específica das opções
+  if (questao.options) {
+    const optionsValidation = validateQuestionOptions(questao.options);
+    if (!optionsValidation.isValid) {
+      return {
+        isValid: false,
+        errors: [...baseValidation.errors, ...optionsValidation.errors]
+      };
+    }
+  }
+  
+  // Validações adicionais para novos campos
+  const additionalRules: ValidationRule[] = [];
+  
+  if (questao.question_type !== undefined) {
+    additionalRules.push({
+      field: "Tipo de questão",
+      value: questao.question_type,
+      rules: ["enum:multiple_choice,true_false,essay,short_answer"],
+    });
+  }
+  
+  if (questao.points !== undefined) {
+    additionalRules.push({
+      field: "Pontos",
+      value: questao.points,
+      rules: ["number", "positive", "max:1000"],
+    });
+  }
+  
+  if (questao.time_limit_seconds !== undefined) {
+    additionalRules.push({
+      field: "Tempo limite em segundos",
+      value: questao.time_limit_seconds,
+      rules: ["number", "positive", "max:7200"], // máximo 2 horas
+    });
+  }
+  
+  if (questao.year !== undefined) {
+    additionalRules.push({
+      field: "Ano",
+      value: questao.year,
+      rules: ["number", "min:1900", "max:2100"],
+    });
+  }
+  
+  if (questao.usage_count !== undefined) {
+    additionalRules.push({
+      field: "Contagem de uso",
+      value: questao.usage_count,
+      rules: ["number", "min:0"],
+    });
+  }
+  
+  if (additionalRules.length > 0) {
+    const additionalValidation = validator.validateFields(additionalRules);
+    if (!additionalValidation.isValid) {
+      return {
+        isValid: false,
+        errors: [...baseValidation.errors, ...additionalValidation.errors]
+      };
+    }
+  }
+  
+  return baseValidation;
 }
 
 // Validação para lista de compras
@@ -691,6 +820,82 @@ export function validateItemListaCompras(item: any): ValidationResult {
       rules: ["string", "maxLength:50"],
     },
   ]);
+}
+
+// Validação para resultados de simulação
+export function validateSimulationResults(results: any): ValidationResult {
+  const validator = new DataValidator();
+
+  const baseValidation = validator.validateFields([
+    {
+      field: "Score",
+      value: results.score,
+      rules: ["required", "number", "min:0"],
+    },
+    {
+      field: "Total",
+      value: results.total,
+      rules: ["required", "number", "positive"],
+    },
+    {
+      field: "Answers",
+      value: results.answers,
+      rules: ["required"],
+    },
+    {
+      field: "Percentage", 
+      value: results.percentage,
+      rules: ["number", "range:0-100"],
+    },
+    {
+      field: "Time taken in minutes",
+      value: results.time_taken_minutes,
+      rules: ["number", "positive", "max:1440"], // máximo 24 horas
+    },
+  ]);
+
+  // Se a validação base falhou, retornar os erros
+  if (!baseValidation.isValid) {
+    return baseValidation;
+  }
+
+  // Validação específica para answers (deve ser um objeto)
+  if (results.answers && typeof results.answers !== 'object') {
+    return {
+      isValid: false,
+      errors: ["Answers deve ser um objeto com as respostas"]
+    };
+  }
+
+  // Validação adicional: score não pode ser maior que total
+  if (results.score > results.total) {
+    return {
+      isValid: false,
+      errors: ["Score não pode ser maior que o total de questões"]
+    };
+  }
+
+  // Validação de data completed_at se fornecida
+  if (results.completed_at) {
+    const dateValidation = validator.validateFields([
+      {
+        field: "Data de conclusão",
+        value: results.completed_at,
+        rules: ["date"],
+      },
+    ]);
+    
+    if (!dateValidation.isValid) {
+      return dateValidation;
+    }
+  }
+
+  // Calcular percentage se não fornecida mas temos score e total
+  if (results.percentage === undefined && results.total > 0) {
+    results.percentage = Math.round((results.score / results.total) * 100);
+  }
+
+  return baseValidation;
 }
 
 /**

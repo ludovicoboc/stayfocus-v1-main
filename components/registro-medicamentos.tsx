@@ -84,7 +84,7 @@ const MedicamentoListItem = memo(function MedicamentoListItem({
           variant="outline"
           className="bg-blue-500/10 text-blue-400 border-blue-500/30"
         >
-          {medicamento.horarios[0]}
+          {medicamento.horarios && medicamento.horarios.length > 0 ? medicamento.horarios[0] : 'N/A'}
         </Badge>
         <div className="ml-3">
           <p className="text-white font-medium">{medicamento.nome}</p>

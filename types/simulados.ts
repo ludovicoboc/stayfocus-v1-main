@@ -44,7 +44,7 @@ export interface SimuladoResultado {
   id?: string
   user_id?: string
   simulation_id?: string
-  score: number
+  score: number // Required for legacy simulation_history table
   total_questions: number
   percentage: number
   time_taken_minutes?: number

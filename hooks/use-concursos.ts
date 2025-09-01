@@ -7,7 +7,7 @@ import { createDebouncedFunction, DEBOUNCE_CONFIGS } from "@/lib/request-debounc
 import { optimizedAuthCache } from "@/lib/auth-cache";
 import { validateAuthState, withAuth, requireAuth } from "@/lib/auth-utils";
 import type { Concurso, Disciplina, Topico, Questao, Simulado } from "@/types/concursos";
-import { validateConcurso, validateQuestao, validateData, sanitizeString, sanitizeDate } from "@/utils/validations";
+import { validateConcurso, validateQuestao, validateQuestionOptions, validateSimulationResults, validateData, sanitizeString, sanitizeDate, sanitizeArray, sanitizeNumber } from "@/utils/validations";
 import { handleSupabaseCompetitionError } from "@/lib/error-handler";
 
 // Cache otimizado para concursos
@@ -47,7 +47,9 @@ async function performFetchConcursos(userId: string): Promise<Concurso[]> {
         *,
         competition_topics (*)
       ),
-      competition_questions (*)
+      competition_questions (
+        id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, question_type, points, time_limit_seconds, tags, source, year, is_active, usage_count, is_ai_generated, created_at, updated_at
+      )
     `)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -569,7 +571,10 @@ export function useConcursos() {
           ...concursoData,
           disciplinas: disciplinasFormatadas,
         } as Concurso;
-        return resultado;
+        
+        // NOVO: Enriquecer com dados do histórico
+        const concursoEnriquecido = await enriquecerConcursoComHistorico(resultado);
+        return concursoEnriquecido;
       });
     } catch (error: any) {
       console.error("❌ Erro inesperado ao buscar concurso:", error);
@@ -786,6 +791,11 @@ export function useConcursos() {
           : undefined,
       };
 
+      // Validação específica das opções antes da validação geral
+      if (questaoSanitizada.options && questaoSanitizada.options.length > 0) {
+        validateData(questaoSanitizada.options, validateQuestionOptions);
+      }
+
       // Validar dados antes de enviar
       validateData(questaoSanitizada, validateQuestao);
 
@@ -800,10 +810,18 @@ export function useConcursos() {
           correct_answer: questaoSanitizada.correct_answer,
           explanation: questaoSanitizada.explanation,
           difficulty: questaoSanitizada.difficulty,
+          question_type: questaoSanitizada.question_type || "multiple_choice",
+          points: questaoSanitizada.points || 1,
+          time_limit_seconds: questaoSanitizada.time_limit_seconds,
+          tags: questaoSanitizada.tags || [],
+          source: questaoSanitizada.source,
+          year: questaoSanitizada.year,
+          is_active: questaoSanitizada.is_active !== false, // Default true
+          usage_count: questaoSanitizada.usage_count || 0,
           is_ai_generated: questaoSanitizada.is_ai_generated || false,
         })
         .select(
-          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_ai_generated, created_at, updated_at",
+          "id, competition_id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, question_type, points, time_limit_seconds, tags, source, year, is_active, usage_count, is_ai_generated, created_at, updated_at",
         )
         .single();
 
@@ -816,22 +834,83 @@ export function useConcursos() {
   };
 
   // NOVA IMPLEMENTAÇÃO: Buscar questões usando view frontend otimizada
-  const buscarQuestoesConcurso = async (concursoId: string) => {
+  const buscarQuestoesConcurso = async (concursoId: string, filtros?: {
+    subjectId?: string;
+    topicId?: string;
+    difficulty?: "facil" | "medio" | "dificil";
+    questionType?: string;
+    limit?: number;
+  }) => {
     if (!user) return []
 
     try {
       // Usar view frontend que é otimizada e filtra automaticamente questões ativas
-      const { data, error } = await supabase
+      let query = supabase
         .from("v_competition_questions_frontend")
         .select("*")
         .eq("competition_id", concursoId)
+        .eq("is_active", true) // Só questões ativas
+
+      // Aplicar filtros se fornecidos
+      if (filtros?.subjectId) {
+        query = query.eq("subject_id", filtros.subjectId)
+      }
+      
+      if (filtros?.topicId) {
+        query = query.eq("topic_id", filtros.topicId)
+      }
+      
+      if (filtros?.difficulty) {
+        query = query.eq("difficulty", filtros.difficulty)
+      }
+      
+      if (filtros?.questionType) {
+        query = query.eq("question_type", filtros.questionType)
+      }
+
+      // Ordenação otimizada: primeiro por uso (questões menos usadas), depois por data
+      query = query
+        .order("usage_count", { ascending: true })
         .order("created_at", { ascending: false })
 
-      if (error) throw error
+      // Aplicar limite se fornecido
+      if (filtros?.limit) {
+        query = query.limit(filtros.limit)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error("Error fetching competition questions:", error)
+        throw error
+      }
+      
       return data as Questao[]
     } catch (error) {
       console.error("Error fetching competition questions:", error)
       return []
+    }
+  }
+
+  // NOVA IMPLEMENTAÇÃO: Incrementar contagem de uso de questão
+  const incrementarUsoQuestao = async (questaoId: string) => {
+    if (!user) return false
+
+    try {
+      const { error } = await supabase
+        .rpc('increment_question_usage', {
+          question_id: questaoId
+        })
+
+      if (error) {
+        console.error("Error incrementing question usage:", error)
+        return false
+      }
+      
+      return true
+    } catch (error) {
+      console.error("Error incrementing question usage:", error)
+      return false
     }
   }
 
@@ -840,17 +919,52 @@ export function useConcursos() {
     if (!user) return null;
 
     try {
+      // Sanitizar dados de entrada
+      const simuladoSanitizado = {
+        ...simulado,
+        title: sanitizeString(simulado.title),
+        description: simulado.description ? sanitizeString(simulado.description) : undefined,
+        questions: sanitizeArray(simulado.questions),
+        question_count: simulado.question_count ? sanitizeNumber(simulado.question_count) : undefined,
+        time_limit_minutes: simulado.time_limit_minutes ? sanitizeNumber(simulado.time_limit_minutes) : undefined,
+        subject_filters: simulado.subject_filters ? sanitizeArray(simulado.subject_filters) : undefined,
+        topic_filters: simulado.topic_filters ? sanitizeArray(simulado.topic_filters) : undefined,
+        is_favorite: simulado.is_favorite || false,
+        status: simulado.status || 'active',
+        is_public: simulado.is_public || false,
+        attempts_count: simulado.attempts_count || 0,
+        best_score: simulado.best_score ? sanitizeNumber(simulado.best_score) : undefined,
+        avg_score: simulado.avg_score ? sanitizeNumber(simulado.avg_score) : undefined,
+      };
+
+      // Validar results se fornecidos
+      if (simuladoSanitizado.results) {
+        validateData(simuladoSanitizado.results, validateSimulationResults);
+      }
+
       const { data, error } = await supabase
         .from("competition_simulations")
         .insert({
-          competition_id: simulado.competition_id,
+          competition_id: simuladoSanitizado.competition_id,
           user_id: user.id,
-          title: simulado.title,
-          questions: simulado.questions,
-          is_favorite: simulado.is_favorite || false,
+          title: simuladoSanitizado.title,
+          description: simuladoSanitizado.description,
+          questions: simuladoSanitizado.questions,
+          question_count: simuladoSanitizado.question_count || simuladoSanitizado.questions.length,
+          time_limit_minutes: simuladoSanitizado.time_limit_minutes,
+          difficulty_filter: simuladoSanitizado.difficulty_filter,
+          subject_filters: simuladoSanitizado.subject_filters,
+          topic_filters: simuladoSanitizado.topic_filters,
+          status: simuladoSanitizado.status,
+          is_public: simuladoSanitizado.is_public,
+          results: simuladoSanitizado.results,
+          is_favorite: simuladoSanitizado.is_favorite,
+          attempts_count: simuladoSanitizado.attempts_count,
+          best_score: simuladoSanitizado.best_score,
+          avg_score: simuladoSanitizado.avg_score,
         })
         .select(
-          "id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at",
+          "id, competition_id, user_id, title, description, questions, question_count, time_limit_minutes, difficulty_filter, subject_filters, topic_filters, status, is_public, results, is_favorite, attempts_count, best_score, avg_score, created_at, updated_at",
         )
         .single();
 
@@ -869,14 +983,28 @@ export function useConcursos() {
       const { data, error } = await supabase
         .from("competition_simulations")
         .select(
-          "id, competition_id, user_id, title, questions, results, is_favorite, created_at, updated_at",
+          "id, competition_id, user_id, title, description, questions, question_count, time_limit_minutes, difficulty_filter, subject_filters, topic_filters, status, is_public, results, is_favorite, attempts_count, best_score, avg_score, created_at, updated_at",
         )
         .eq("competition_id", concursoId)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data as Simulado[];
+      
+      // Validar results de cada simulado retornado
+      const simuladosValidados = data?.map((simulado) => {
+        if (simulado.results) {
+          try {
+            validateData(simulado.results, validateSimulationResults);
+          } catch (validationError) {
+            console.warn(`Simulado ${simulado.id} tem results inválidos:`, validationError);
+            // Manter results mas sinalizar problema
+          }
+        }
+        return simulado;
+      }) || [];
+
+      return simuladosValidados as Simulado[];
     } catch (error) {
       console.error("Error fetching competition simulations:", error);
       return [];
@@ -885,7 +1013,7 @@ export function useConcursos() {
 
   // NOVA IMPLEMENTAÇÃO: Usar função otimizada para estatísticas de simulação
   const obterEstatisticasSimulacao = async (simuladoId: string) => {
-    if (!user) return null
+    if (!user?.id) return null
     
     try {
       const { data, error } = await supabase.rpc('get_simulation_statistics', {
@@ -893,12 +1021,190 @@ export function useConcursos() {
         p_user_id: user.id
       })
       
-      if (error) throw error
+      if (error) throw error;
       
       return data && data.length > 0 ? data[0] : null
     } catch (error) {
-      console.error("Error fetching simulation statistics:", error)
+      console.error("Error fetching enhanced simulation statistics:", error)
       return null
+    }
+  }
+
+  // NOVO: Enriquecer dados com informações do histórico
+  const enriquecerConcursoComHistorico = async (concurso: Concurso) => {
+    if (!user?.id) return concurso
+    
+    try {
+      // Buscar estatísticas do histórico unificado para este concurso
+      const { data: historicoData, error: historicoError } = await supabase
+        .from("activity_history")
+        .select("*")
+        .eq("user_id", user.id)
+        .or(`module.eq.concursos,module.eq.simulados`)
+        .or(`metadata->>competition_id.eq.${concurso.id},metadata->>simulation_id.eq.${concurso.id}`)
+        .order('completed_at', { ascending: false })
+        .limit(50)
+
+      if (historicoError) {
+        console.warn("Erro ao buscar histórico do concurso:", historicoError)
+        return concurso
+      }
+
+      const atividades = historicoData || []
+      
+      // Calcular estatísticas enriquecidas
+      const estatisticasEnriquecidas = {
+        total_study_sessions: atividades.filter(a => a.activity_type === 'study_session').length,
+        total_simulations: atividades.filter(a => a.activity_type === 'simulation_completed').length,
+        total_study_time: atividades.reduce((sum, a) => sum + (a.duration_minutes || 0), 0),
+        average_performance: atividades.length > 0 
+          ? atividades.reduce((sum, a) => sum + (a.score || 0), 0) / atividades.length 
+          : 0,
+        current_streak: calcularSequenciaEstudos(atividades),
+        last_activity: atividades[0]?.activity_date || null,
+        performance_trend: calcularTendenciaPerformance(atividades),
+        study_consistency: calcularConsistenciaEstudos(atividades),
+        favorite_subjects: identificarMateriasPreferidas(atividades),
+        weak_areas: identificarAreasFrageis(atividades),
+        study_patterns: analisarPadroesEstudo(atividades),
+        recent_attempts: atividades?.slice(0, 5) || []
+      }
+
+      // Retornar concurso enriquecido
+      return {
+        ...concurso,
+        enriched_stats: estatisticasEnriquecidas,
+        has_history_data: atividades.length > 0
+      }
+    } catch (error) {
+      console.error("Erro ao enriquecer concurso com histórico:", error)
+      return concurso
+    }
+  }
+
+  // Funções auxiliares para análise do histórico
+  const calcularSequenciaEstudos = (atividades: any[]): number => {
+    if (atividades.length === 0) return 0
+    
+    const datasUnicas = [...new Set(atividades.map(a => a.activity_date))].sort().reverse()
+    let sequencia = 0
+    const hoje = new Date().toISOString().split('T')[0]
+    
+    for (let i = 0; i < datasUnicas.length; i++) {
+      const dataAtividade = datasUnicas[i]
+      const diasDiferenca = Math.floor(
+        (new Date(hoje).getTime() - new Date(dataAtividade).getTime()) / (1000 * 60 * 60 * 24)
+      )
+      
+      if (diasDiferenca <= i + 1) {
+        sequencia++
+      } else {
+        break
+      }
+    }
+    
+    return sequencia
+  }
+
+  const calcularTendenciaPerformance = (atividades: any[]): 'improving' | 'stable' | 'declining' => {
+    if (atividades.length < 4) return 'stable'
+    
+    const recentes = atividades.slice(0, 2)
+    const anteriores = atividades.slice(2, 4)
+    
+    const mediaRecente = recentes.reduce((sum, a) => sum + (a.score || 0), 0) / recentes.length
+    const mediaAnterior = anteriores.reduce((sum, a) => sum + (a.score || 0), 0) / anteriores.length
+    
+    const diferenca = mediaRecente - mediaAnterior
+    
+    if (diferenca > 5) return 'improving'
+    if (diferenca < -5) return 'declining'
+    return 'stable'
+  }
+
+  const calcularConsistenciaEstudos = (atividades: any[]): number => {
+    if (atividades.length < 7) return 0
+    
+    // Calcular quantos dos últimos 7 dias tiveram atividades
+    const ultimosSete = new Array(7).fill(0).map((_, i) => {
+      const data = new Date()
+      data.setDate(data.getDate() - i)
+      return data.toISOString().split('T')[0]
+    })
+    
+    const diasComAtividade = ultimosSete.filter(data => 
+      atividades.some(a => a.activity_date === data)
+    ).length
+    
+    return Math.round((diasComAtividade / 7) * 100)
+  }
+
+  const identificarMateriasPreferidas = (atividades: any[]): string[] => {
+    const contadorMaterias: Record<string, number> = {}
+    
+    atividades.forEach(a => {
+      const materia = a.category || a.metadata?.subject || 'Geral'
+      contadorMaterias[materia] = (contadorMaterias[materia] || 0) + 1
+    })
+    
+    return Object.entries(contadorMaterias)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3)
+      .map(([materia]) => materia)
+  }
+
+  const identificarAreasFrageis = (atividades: any[]): string[] => {
+    const performancePorMateria: Record<string, number[]> = {}
+    
+    atividades.forEach(a => {
+      if (a.score && a.score > 0) {
+        const materia = a.category || a.metadata?.subject || 'Geral'
+        if (!performancePorMateria[materia]) {
+          performancePorMateria[materia] = []
+        }
+        performancePorMateria[materia].push(a.score)
+      }
+    })
+    
+    const mediaPorMateria = Object.entries(performancePorMateria)
+      .map(([materia, scores]) => ({
+        materia,
+        media: scores.reduce((sum, s) => sum + s, 0) / scores.length
+      }))
+      .filter(item => item.media < 70) // Considerar frágeis se média < 70%
+      .sort((a, b) => a.media - b.media)
+      .slice(0, 3)
+      .map(item => item.materia)
+    
+    return mediaPorMateria
+  }
+
+  const analisarPadroesEstudo = (atividades: any[]): any => {
+    const padroesPorHora: Record<number, number> = {}
+    const padroesPorDia: Record<string, number> = {}
+    
+    atividades.forEach(a => {
+      if (a.completed_at) {
+        const data = new Date(a.completed_at)
+        const hora = data.getHours()
+        const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'long' })
+        
+        padroesPorHora[hora] = (padroesPorHora[hora] || 0) + 1
+        padroesPorDia[diaSemana] = (padroesPorDia[diaSemana] || 0) + 1
+      }
+    })
+    
+    const horarioPreferido = Object.entries(padroesPorHora)
+      .sort(([,a], [,b]) => b - a)[0]?.[0]
+    
+    const diaPreferido = Object.entries(padroesPorDia)
+      .sort(([,a], [,b]) => b - a)[0]?.[0]
+    
+    return {
+      horario_preferido: horarioPreferido ? `${horarioPreferido}:00` : null,
+      dia_preferido: diaPreferido || null,
+      distribuicao_horarios: padroesPorHora,
+      distribuicao_dias: padroesPorDia
     }
   }
 
@@ -1029,9 +1335,10 @@ export function useConcursos() {
     atualizarProgressoDisciplina,
     atualizarTopicoCompletado,
 
-    // Questões
+    // Questões (otimizadas)
     adicionarQuestao,
     buscarQuestoesConcurso,
+    incrementarUsoQuestao,
 
     // Simulados
     adicionarSimulado,
@@ -1041,6 +1348,7 @@ export function useConcursos() {
     // Utilitários
     calcularProgressoConcurso,
     obterEstatisticasSimulacao, // Nova função otimizada
+    enriquecerConcursoComHistorico, // NOVO: Enriquecimento com histórico
     validateCompetitionAccess,
     handleSupabaseError,
 

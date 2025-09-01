@@ -1,0 +1,187 @@
+-- =====================================================
+-- MIGRATION 009: Dashboard System
+-- Description: Complete dashboard system with all dashboard-related tables and functionality
+-- Date: 2024-01-01
+-- =====================================================
+
+BEGIN;
+
+-- =====================================================
+-- DASHBOARD TABLES
+-- =====================================================
+
+-- Tabela: painel_dia
+-- Descrição: Armazena as atividades programadas para o painel do dia
+CREATE TABLE IF NOT EXISTS painel_dia (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    horario text NOT NULL CHECK (horario ~ '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'),
+    atividade text NOT NULL CHECK (length(trim(atividade)) > 0 AND length(atividade) <= 200),
+    cor text NOT NULL DEFAULT '#3b82f6' CHECK (cor ~ '^#[0-9A-Fa-f]{6}$'),
+    concluida boolean NOT NULL DEFAULT false,
+    date date NOT NULL DEFAULT CURRENT_DATE,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- Tabela: prioridades
+-- Descrição: Armazena as prioridades/tarefas importantes do usuário
+CREATE TABLE IF NOT EXISTS prioridades (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    titulo text NOT NULL CHECK (length(trim(titulo)) > 0 AND length(titulo) <= 100),
+    importante boolean NOT NULL DEFAULT false,
+    concluida boolean NOT NULL DEFAULT false,
+    date date NOT NULL DEFAULT CURRENT_DATE,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- Tabela: sessoes_foco (dashboard version)
+-- Descrição: Armazena as sessões de foco/pomodoro do usuário para o dashboard
+CREATE TABLE IF NOT EXISTS sessoes_foco (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    duracao_minutos integer NOT NULL CHECK (duracao_minutos > 0 AND duracao_minutos <= 180),
+    tempo_restante integer NOT NULL CHECK (tempo_restante >= 0),
+    ativa boolean NOT NULL DEFAULT false,
+    pausada boolean NOT NULL DEFAULT false,
+    date date NOT NULL DEFAULT CURRENT_DATE,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- Tabela: compromissos
+-- Descrição: Armazena compromissos e agendamentos do usuário
+CREATE TABLE IF NOT EXISTS compromissos (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    titulo text NOT NULL CHECK (length(trim(titulo)) > 0 AND length(titulo) <= 200),
+    horario text NOT NULL CHECK (horario ~ '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'),
+    tipo text NOT NULL CHECK (tipo IN ('saude', 'estudos', 'alimentacao', 'trabalho', 'lazer', 'outros')),
+    data date NOT NULL,
+    concluido boolean NOT NULL DEFAULT false,
+    observacoes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- =====================================================
+-- COMMENTS
+-- =====================================================
+
+COMMENT ON TABLE painel_dia IS 'Atividades programadas para o painel do dia do usuário';
+COMMENT ON COLUMN painel_dia.horario IS 'Horário da atividade no formato HH:MM';
+COMMENT ON COLUMN painel_dia.atividade IS 'Descrição da atividade (máx 200 caracteres)';
+COMMENT ON COLUMN painel_dia.cor IS 'Cor da atividade em formato hexadecimal';
+COMMENT ON COLUMN painel_dia.concluida IS 'Indica se a atividade foi concluída';
+COMMENT ON COLUMN painel_dia.date IS 'Data da atividade (YYYY-MM-DD)';
+
+COMMENT ON TABLE prioridades IS 'Prioridades e tarefas importantes do usuário';
+COMMENT ON COLUMN prioridades.titulo IS 'Título da prioridade (máx 100 caracteres)';
+COMMENT ON COLUMN prioridades.importante IS 'Marca se a prioridade é de alta importância';
+COMMENT ON COLUMN prioridades.concluida IS 'Indica se a prioridade foi concluída';
+COMMENT ON COLUMN prioridades.date IS 'Data da prioridade (YYYY-MM-DD)';
+
+COMMENT ON TABLE sessoes_foco IS 'Sessões de foco/pomodoro do usuário';
+COMMENT ON COLUMN sessoes_foco.duracao_minutos IS 'Duração da sessão em minutos (1-180)';
+COMMENT ON COLUMN sessoes_foco.tempo_restante IS 'Tempo restante da sessão em segundos';
+COMMENT ON COLUMN sessoes_foco.ativa IS 'Indica se a sessão está ativa';
+COMMENT ON COLUMN sessoes_foco.pausada IS 'Indica se a sessão está pausada';
+COMMENT ON COLUMN sessoes_foco.date IS 'Data da sessão de foco (YYYY-MM-DD)';
+
+COMMENT ON TABLE compromissos IS 'Compromissos e agendamentos do usuário';
+COMMENT ON COLUMN compromissos.titulo IS 'Título do compromisso (máx 200 caracteres)';
+COMMENT ON COLUMN compromissos.horario IS 'Horário do compromisso no formato HH:MM';
+COMMENT ON COLUMN compromissos.tipo IS 'Categoria do compromisso (saude, estudos, alimentacao, trabalho, lazer, outros)';
+COMMENT ON COLUMN compromissos.data IS 'Data do compromisso (YYYY-MM-DD)';
+COMMENT ON COLUMN compromissos.concluido IS 'Indica se o compromisso foi concluído';
+COMMENT ON COLUMN compromissos.observacoes IS 'Observações adicionais sobre o compromisso';
+
+-- =====================================================
+-- ROW LEVEL SECURITY (RLS)
+-- =====================================================
+
+-- Enable RLS for all tables
+ALTER TABLE painel_dia ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prioridades ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessoes_foco ENABLE ROW LEVEL SECURITY;
+ALTER TABLE compromissos ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies - simplified for all operations
+DROP POLICY IF EXISTS "Users can manage their own painel_dia" ON painel_dia;
+CREATE POLICY "Users can manage their own painel_dia" ON painel_dia FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can manage their own prioridades" ON prioridades;
+CREATE POLICY "Users can manage their own prioridades" ON prioridades FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can manage their own sessoes_foco" ON sessoes_foco;
+CREATE POLICY "Users can manage their own sessoes_foco" ON sessoes_foco FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can manage their own compromissos" ON compromissos;
+CREATE POLICY "Users can manage their own compromissos" ON compromissos FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- =====================================================
+-- PERFORMANCE INDEXES
+-- =====================================================
+
+-- Indexes for painel_dia
+CREATE INDEX IF NOT EXISTS idx_painel_dia_user_id ON painel_dia(user_id);
+CREATE INDEX IF NOT EXISTS idx_painel_dia_user_date ON painel_dia(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_painel_dia_horario ON painel_dia(user_id, date, horario);
+CREATE INDEX IF NOT EXISTS idx_painel_dia_concluida ON painel_dia(user_id, date, concluida);
+CREATE INDEX IF NOT EXISTS idx_painel_dia_created_at ON painel_dia(user_id, created_at DESC);
+
+-- Indexes for prioridades
+CREATE INDEX IF NOT EXISTS idx_prioridades_user_id ON prioridades(user_id);
+CREATE INDEX IF NOT EXISTS idx_prioridades_user_date ON prioridades(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_prioridades_importante ON prioridades(user_id, date, importante);
+CREATE INDEX IF NOT EXISTS idx_prioridades_concluida ON prioridades(user_id, date, concluida);
+CREATE INDEX IF NOT EXISTS idx_prioridades_created_at ON prioridades(user_id, created_at DESC);
+
+-- Indexes for sessoes_foco
+CREATE INDEX IF NOT EXISTS idx_sessoes_foco_user_id ON sessoes_foco(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessoes_foco_user_date ON sessoes_foco(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_sessoes_foco_ativa ON sessoes_foco(user_id, date, ativa);
+CREATE INDEX IF NOT EXISTS idx_sessoes_foco_created_at ON sessoes_foco(user_id, created_at DESC);
+
+-- Indexes for compromissos
+CREATE INDEX IF NOT EXISTS idx_compromissos_user_id ON compromissos(user_id);
+CREATE INDEX IF NOT EXISTS idx_compromissos_user_date ON compromissos(user_id, data);
+CREATE INDEX IF NOT EXISTS idx_compromissos_horario ON compromissos(user_id, data, horario);
+CREATE INDEX IF NOT EXISTS idx_compromissos_tipo ON compromissos(user_id, tipo);
+CREATE INDEX IF NOT EXISTS idx_compromissos_concluido ON compromissos(user_id, data, concluido);
+CREATE INDEX IF NOT EXISTS idx_compromissos_created_at ON compromissos(user_id, created_at DESC);
+
+-- =====================================================
+-- TRIGGERS FOR UPDATED_AT
+-- =====================================================
+
+-- Triggers para atualizar updated_at
+DROP TRIGGER IF EXISTS update_painel_dia_updated_at ON update_updated_at_column;
+CREATE TRIGGER update_painel_dia_updated_at 
+    BEFORE UPDATE ON painel_dia 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_prioridades_updated_at ON update_updated_at_column;
+CREATE TRIGGER update_prioridades_updated_at 
+    BEFORE UPDATE ON prioridades 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_sessoes_foco_updated_at ON update_updated_at_column;
+CREATE TRIGGER update_sessoes_foco_updated_at 
+    BEFORE UPDATE ON sessoes_foco 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_compromissos_updated_at ON update_updated_at_column;
+CREATE TRIGGER update_compromissos_updated_at 
+    BEFORE UPDATE ON compromissos 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =====================================================
+-- ADDITIONAL CONSTRAINTS
+-- =====================================================
+
+-- Ensure only one active focus session per user per date
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessoes_foco_user_ativa 
+    ON sessoes_foco(user_id, date) 
+    WHERE ativa = true;
+
+COMMIT;

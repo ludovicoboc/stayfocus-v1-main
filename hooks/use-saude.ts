@@ -220,13 +220,26 @@ export function useSaude(date?: string) {
         p_observacoes: novoMedicamentoTomado.observacoes ? sanitizeString(novoMedicamentoTomado.observacoes) : null
       })
 
-      if (error) throw error
+      if (error) {
+        // Tratar erros específicos da função RPC
+        if (error.message.includes('não encontrado') || error.message.includes('não pertence')) {
+          throw new Error("Medicamento não encontrado ou não pertence ao usuário")
+        }
+        if (error.message.includes('formato')) {
+          throw new Error("Horário deve ter formato HH:MM")
+        }
+        throw error
+      }
 
       await carregarMedicamentosTomados()
       await carregarMedicamentos() // Recarregar para atualizar resumo
       return data // UUID do registro criado
     } catch (error) {
       console.error("Erro ao marcar medicamento como tomado:", error)
+      // Logging mais detalhado para debugging
+      if (error instanceof Error) {
+        console.error("Erro específico:", error.message)
+      }
       return null
     }
   }

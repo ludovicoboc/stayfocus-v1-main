@@ -10,7 +10,14 @@
       "Bash(mkdir:*)",
       "Bash(find:*)",
       "Bash(vercel)",
-      "Bash(vercel:*)"
+      "Bash(vercel:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm view:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm i:*)",
+      "Bash(npm ci:*)",
+      "Bash(NEXT_TELEMETRY_DISABLED=1 npm run build)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npm run build)"
     ],
     "deny": [],
     "ask": []

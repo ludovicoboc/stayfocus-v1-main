@@ -55,9 +55,10 @@ export interface Questao {
   question_text: string
   options?: QuestionOption[]
   correct_answer?: string
+  correct_options?: string[]
   explanation?: string
   difficulty?: "facil" | "medio" | "dificil"
-  question_type?: "multiple_choice" | "true_false" | "essay" | "short_answer"
+  question_type?: "multiple_choice" | "true_false" | "essay" | "fill_blank"
   points?: number
   time_limit_seconds?: number
   tags?: string[]

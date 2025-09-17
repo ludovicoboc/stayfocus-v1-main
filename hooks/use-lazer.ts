@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "./use-auth"
 import type { AtividadeLazer, SugestaoDescanso, SugestaoFavorita, SessaoLazer, EstatisticasLazer } from "@/types/lazer"
@@ -23,30 +23,38 @@ export function useLazer() {
   const [operationLoading, setOperationLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Carregar dados iniciais
-  useEffect(() => {
-    if (user) {
-      Promise.all([
-        carregarAtividades(),
-        carregarSugestoes(),
-        carregarFavoritas(),
-        carregarSessaoAtual(),
-        carregarEstatisticas(),
-      ]).finally(() => setLoading(false))
+  const carregarEstatisticas = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_lazer_statistics', {
+        p_user_id: user.id,
+      });
+
+      if (rpcError) {
+        console.error("Erro ao carregar estatísticas com RPC:", rpcError);
+        setError("Erro ao carregar estatísticas");
+        return;
+      }
+
+      setEstatisticas(data);
+    } catch (err) {
+      console.error("Erro na chamada RPC de estatísticas:", err);
+      setError("Erro ao processar estatísticas");
     }
-  }, [user])
+  }, [user, supabase]);
 
   const carregarAtividades = useCallback(async () => {
     if (!user) return
 
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("atividades_lazer")
       .select("*")
       .eq("user_id", user.id)
       .order("data_realizacao", { ascending: false })
 
-    if (error) {
-      console.error("Erro ao carregar atividades:", error)
+    if (fetchError) {
+      console.error("Erro ao carregar atividades:", fetchError)
       setError("Erro ao carregar atividades")
       return
     }
@@ -55,13 +63,13 @@ export function useLazer() {
   }, [user, supabase])
 
   const carregarSugestoes = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("sugestoes_descanso")
       .select("*")
       .order("created_at", { ascending: false })
 
-    if (error) {
-      console.error("Erro ao carregar sugestões:", error)
+    if (fetchError) {
+      console.error("Erro ao carregar sugestões:", fetchError)
       setError("Erro ao carregar sugestões")
       return
     }
@@ -72,7 +80,7 @@ export function useLazer() {
   const carregarFavoritas = useCallback(async () => {
     if (!user) return
 
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("sugestoes_favoritas")
       .select(`
         *,
@@ -80,8 +88,8 @@ export function useLazer() {
       `)
       .eq("user_id", user.id)
 
-    if (error) {
-      console.error("Erro ao carregar favoritas:", error)
+    if (fetchError) {
+      console.error("Erro ao carregar favoritas:", fetchError)
       setError("Erro ao carregar favoritas")
       return
     }
@@ -92,15 +100,15 @@ export function useLazer() {
   const carregarSessaoAtual = useCallback(async () => {
     if (!user) return
 
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("sessoes_lazer")
       .select("*")
       .eq("user_id", user.id)
       .eq("status", "ativo")
       .single()
 
-    if (error && error.code !== "PGRST116") {
-      console.error("Erro ao carregar sessão atual:", error)
+    if (fetchError && fetchError.code !== "PGRST116") {
+      console.error("Erro ao carregar sessão atual:", fetchError)
       setError("Erro ao carregar sessão atual")
       return
     }
@@ -108,41 +116,20 @@ export function useLazer() {
     setSessaoAtual(data)
   }, [user, supabase])
 
-  const carregarEstatisticas = useCallback(async () => {
-    if (!user) return
-
-    // Contar atividades realizadas
-    const { count: totalAtividades } = await supabase
-      .from("atividades_lazer")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-
-    // Calcular tempo total
-    const { data: tempoData } = await supabase.from("atividades_lazer").select("duracao_minutos").eq("user_id", user.id)
-
-    const tempoTotal = tempoData?.reduce((acc, curr) => acc + (curr.duracao_minutos || 0), 0) || 0
-
-    // Encontrar categoria favorita
-    const { data: categoriaData } = await supabase
-      .from("atividades_lazer")
-      .select("categoria")
-      .eq("user_id", user.id)
-      .not("categoria", "is", null)
-
-    const categorias = categoriaData?.map((item) => item.categoria) || []
-    const categoriaFavorita =
-      categorias.length > 0
-        ? categorias.reduce((a, b, i, arr) =>
-            arr.filter((v) => v === a).length >= arr.filter((v) => v === b).length ? a : b,
-          )
-        : null
-
-    setEstatisticas({
-      atividadesRealizadas: totalAtividades || 0,
-      tempoTotalMinutos: tempoTotal,
-      categoriaFavorita,
-    })
-  }, [user, supabase])
+  // Carregar dados iniciais
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      Promise.all([
+        carregarAtividades(),
+        carregarSugestoes(),
+        carregarFavoritas(),
+        carregarSessaoAtual(),
+        carregarEstatisticas(),
+      ]).finally(() => setLoading(false))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
 
   const adicionarAtividade = useCallback(async (
     atividade: Omit<AtividadeLazer, "id" | "user_id" | "created_at" | "updated_at">,
@@ -168,16 +155,16 @@ export function useLazer() {
       // Validar dados antes de enviar
       validateData(atividadeSanitizada, validateAtividadeLazer)
 
-      const { data, error } = await supabase
+      const { data, error: insertError } = await supabase
         .from("atividades_lazer")
         .insert([{ ...atividadeSanitizada, user_id: user.id }])
         .select()
         .single()
 
-      if (error) {
-        console.error("Erro ao adicionar atividade:", error)
+      if (insertError) {
+        console.error("Erro ao adicionar atividade:", insertError)
         setError("Erro ao adicionar atividade")
-        throw error
+        throw insertError
       }
 
       await Promise.all([carregarAtividades(), carregarEstatisticas()])
@@ -204,7 +191,7 @@ export function useLazer() {
         await finalizarSessao(sessaoAtual.id)
       }
 
-      const { data, error } = await supabase
+      const { data, error: insertError } = await supabase
         .from("sessoes_lazer")
         .insert([
           {
@@ -216,10 +203,10 @@ export function useLazer() {
         .select()
         .single()
 
-      if (error) {
-        console.error("Erro ao criar sessão:", error)
+      if (insertError) {
+        console.error("Erro ao criar sessão:", insertError)
         setError("Erro ao criar sessão de lazer")
-        throw error
+        throw insertError
       }
 
       setSessaoAtual(data)
@@ -228,14 +215,15 @@ export function useLazer() {
     } finally {
       setOperationLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, supabase, sessaoAtual])
 
   const atualizarSessao = async (id: string, updates: Partial<SessaoLazer>) => {
-    const { data, error } = await supabase.from("sessoes_lazer").update(updates).eq("id", id).select().single()
+    const { data, error: updateError } = await supabase.from("sessoes_lazer").update(updates).eq("id", id).select().single()
 
-    if (error) {
-      console.error("Erro ao atualizar sessão:", error)
-      throw error
+    if (updateError) {
+      console.error("Erro ao atualizar sessão:", updateError)
+      throw updateError
     }
 
     if (sessaoAtual?.id === id) {
@@ -266,26 +254,26 @@ export function useLazer() {
       const jaFavorita = favoritas.find((f) => f.sugestao_id === sugestaoId)
 
       if (jaFavorita) {
-        const { error } = await supabase.from("sugestoes_favoritas").delete().eq("id", jaFavorita.id)
+        const { error: deleteError } = await supabase.from("sugestoes_favoritas").delete().eq("id", jaFavorita.id)
 
-        if (error) {
-          console.error("Erro ao remover favorita:", error)
+        if (deleteError) {
+          console.error("Erro ao remover favorita:", deleteError)
           setError("Erro ao remover dos favoritos")
-          throw error
+          throw deleteError
         }
         setSuccessMessage("Removido dos favoritos!")
       } else {
-        const { error } = await supabase.from("sugestoes_favoritas").insert([
+        const { error: insertError } = await supabase.from("sugestoes_favoritas").insert([
           {
             user_id: user.id,
             sugestao_id: sugestaoId,
           },
         ])
 
-        if (error) {
-          console.error("Erro ao adicionar favorita:", error)
+        if (insertError) {
+          console.error("Erro ao adicionar favorita:", insertError)
           setError("Erro ao adicionar aos favoritos")
-          throw error
+          throw insertError
         }
         setSuccessMessage("Adicionado aos favoritos!")
       }
@@ -297,11 +285,11 @@ export function useLazer() {
   }, [user, supabase, favoritas, carregarFavoritas])
 
   const adicionarSugestao = useCallback(async (sugestao: Omit<SugestaoDescanso, "id" | "created_at">) => {
-    const { data, error } = await supabase.from("sugestoes_descanso").insert([sugestao]).select().single()
+    const { data, error: insertError } = await supabase.from("sugestoes_descanso").insert([sugestao]).select().single()
 
-    if (error) {
-      console.error("Erro ao adicionar sugestão:", error)
-      throw error
+    if (insertError) {
+      console.error("Erro ao adicionar sugestão:", insertError)
+      throw insertError
     }
 
     await carregarSugestoes()

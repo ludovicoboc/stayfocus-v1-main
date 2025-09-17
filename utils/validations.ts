@@ -963,4 +963,128 @@ export function sanitizeDate(value: any): string | null {
   return null;
 }
 
+/**
+ * Validates question options according to SQL constraints
+ */
+export function validateQuestionOptionsConstraints(
+  options: any[],
+  questionType: string
+): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Multiple choice must have at least 2 options
+  if (questionType === "multiple_choice") {
+    if (!options || options.length < 2) {
+      errors.push("Questões de múltipla escolha devem ter pelo menos 2 opções");
+    }
+
+    // Must have exactly one correct answer for multiple choice
+    const correctCount = options.filter(opt => opt.isCorrect).length;
+    if (correctCount !== 1) {
+      errors.push("Questões de múltipla escolha devem ter exatamente uma resposta correta");
+    }
+  }
+
+  // True/false should have exactly 2 options
+  if (questionType === "true_false") {
+    if (!options || options.length !== 2) {
+      errors.push("Questões verdadeiro/falso devem ter exatamente 2 opções");
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
+/**
+ * Validates receita according to SQL constraints
+ */
+export function validateReceitaConstraints(receita: {
+  nome: string;
+  ingredientes: string[];
+  modo_preparo: string;
+  tempo_preparo?: number;
+  porcoes?: number;
+}): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Nome: length(trim(nome)) >= 2
+  if (!receita.nome || receita.nome.trim().length < 2) {
+    errors.push("Nome da receita deve ter pelo menos 2 caracteres");
+  }
+
+  // Nome: máximo 100 caracteres (SQL constraint)
+  if (receita.nome && receita.nome.length > 100) {
+    errors.push("Nome da receita não pode ter mais de 100 caracteres");
+  }
+
+  // Ingredientes: array_length(ingredientes, 1) > 0
+  if (!receita.ingredientes || receita.ingredientes.length === 0) {
+    errors.push("Receita deve ter pelo menos um ingrediente");
+  }
+
+  // Modo de preparo: length(trim(modo_preparo)) >= 10
+  if (!receita.modo_preparo || receita.modo_preparo.trim().length < 10) {
+    errors.push("Modo de preparo deve ter pelo menos 10 caracteres");
+  }
+
+  // Tempo preparo: 0 < tempo_preparo <= 1440
+  if (receita.tempo_preparo !== undefined) {
+    if (receita.tempo_preparo <= 0 || receita.tempo_preparo > 1440) {
+      errors.push("Tempo de preparo deve estar entre 1 e 1440 minutos (24 horas)");
+    }
+  }
+
+  // Porções: 0 < porcoes <= 50
+  if (receita.porcoes !== undefined) {
+    if (receita.porcoes <= 0 || receita.porcoes > 50) {
+      errors.push("Número de porções deve estar entre 1 e 50");
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
+/**
+ * Validates study session according to SQL constraints
+ */
+export function validateStudySessionConstraints(session: {
+  subject: string;
+  duration_minutes: number;
+  pomodoro_cycles?: number;
+}): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Subject: NOT NULL and reasonable length
+  if (!session.subject || session.subject.trim().length === 0) {
+    errors.push("Disciplina é obrigatória");
+  }
+
+  if (session.subject && session.subject.length > 200) {
+    errors.push("Nome da disciplina não pode ter mais de 200 caracteres");
+  }
+
+  // Duration: 0 < duration_minutes <= 1440
+  if (session.duration_minutes <= 0 || session.duration_minutes > 1440) {
+    errors.push("Duração deve estar entre 1 e 1440 minutos (24 horas)");
+  }
+
+  // Pomodoro cycles: 0 <= pomodoro_cycles <= 100
+  if (session.pomodoro_cycles !== undefined) {
+    if (session.pomodoro_cycles < 0 || session.pomodoro_cycles > 100) {
+      errors.push("Ciclos pomodoro devem estar entre 0 e 100");
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
 export default DataValidator;

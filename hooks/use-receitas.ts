@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-provider";
 import { createClient } from "@/lib/supabase";
 import {
   validateReceita,
+  validateReceitaConstraints,
   validateItemListaCompras,
   validateData,
   sanitizeString,

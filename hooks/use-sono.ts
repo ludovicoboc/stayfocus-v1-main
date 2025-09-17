@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/lib/auth-provider"
 import { createClient } from "@/lib/supabase"
 import { 
@@ -8,9 +8,7 @@ import {
   ConfiguracaoLembretes, 
   EstatisticasSono,
   RegistroSonoInsert,
-  RegistroSonoUpdate,
-  ConfiguracaoLembretesInsert,
-  ConfiguracaoLembretesUpdate
+  ConfiguracaoLembretesInsert
 } from "@/types/sono"
 import { validateRegistroSono, validateData, sanitizeString, sanitizeDate, sanitizeNumber } from "@/utils/validations"
 
@@ -22,8 +20,32 @@ export function useSono() {
   const [estatisticas, setEstatisticas] = useState<EstatisticasSono | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Calcular estatísticas de sono com RPC
+  const calcularEstatisticas = useCallback(async () => {
+    if (!user) return null
+
+    try {
+      const { data, error } = await supabase.rpc('get_sleep_statistics', {
+        p_user_id: user.id,
+        days_limit: 7
+      })
+
+      if (error) throw error
+
+      // A resposta do RPC já corresponde à interface EstatisticasSono
+      const stats = data as EstatisticasSono
+      setEstatisticas(stats)
+      return stats
+    } catch (error) {
+      console.error("Erro ao calcular estatísticas com RPC:", error)
+      setEstatisticas(null) // Limpa estatísticas em caso de erro
+      return null
+    }
+  }, [user, supabase])
+
+
   // Carregar registros de sono
-  const fetchRegistrosSono = async (diasAtras: number = 30) => {
+  const fetchRegistrosSono = useCallback(async (diasAtras: number = 30) => {
     if (!user) {
       setLoading(false)
       return { data: [], error: null }
@@ -46,6 +68,11 @@ export function useSono() {
       const registros = data || []
       setRegistrosSono(registros)
       
+      // Após carregar os registros, calcula as estatísticas
+      if (registros.length > 0) {
+        await calcularEstatisticas()
+      }
+      
       return { data: registros, error: null }
     } catch (error) {
       console.error("Erro ao carregar registros de sono:", error)
@@ -53,7 +80,7 @@ export function useSono() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, supabase, calcularEstatisticas])
 
   // Salvar novo registro de sono
   const salvarRegistroSono = async (registro: RegistroSonoInsert) => {
@@ -92,7 +119,6 @@ export function useSono() {
             wake_time: registroSanitizado.wake_time,
             sleep_quality: registroSanitizado.sleep_quality,
             notes: registroSanitizado.notes,
-            updated_at: new Date().toISOString()
           })
           .eq("id", registroExistente.id)
           .eq("user_id", user.id)
@@ -166,7 +192,6 @@ export function useSono() {
             weekdays: configuracao.weekdays,
             message: configuracao.message || null,
             active: configuracao.active,
-            updated_at: new Date().toISOString()
           })
           .eq("id", configExistente.id)
           .eq("user_id", user.id)
@@ -205,114 +230,8 @@ export function useSono() {
     }
   }
 
-  // Calcular estatísticas de sono
-  const calcularEstatisticas = async (): Promise<EstatisticasSono | null> => {
-    if (!user || registrosSono.length === 0) return null
-
-    try {
-      // Buscar registros dos últimos 7 dias
-      const dataLimite = new Date()
-      dataLimite.setDate(dataLimite.getDate() - 7)
-      
-      const registrosRecentes = registrosSono.filter(registro => 
-        new Date(registro.date) >= dataLimite
-      )
-
-      if (registrosRecentes.length === 0) {
-        return {
-          mediaHorasSono: 0,
-          mediaQualidade: 0,
-          consistencia: 0,
-          totalRegistros: 0,
-          tendenciaHoras: 'estavel',
-          tendenciaQualidade: 'estavel',
-          registrosPorDia: {},
-          melhorDia: null,
-          piorDia: null,
-          horaIdealDormir: null,
-          horaIdealAcordar: null
-        }
-      }
-
-      // Calcular horas de sono para cada registro
-      const dadosComHoras = registrosRecentes.map(registro => {
-        const horasSono = calcularHorasSono(registro.bedtime, registro.wake_time)
-        return { ...registro, horasSono }
-      })
-
-      // Calcular médias
-      const mediaHorasSono = dadosComHoras.reduce((acc, r) => acc + r.horasSono, 0) / dadosComHoras.length
-      const mediaQualidade = dadosComHoras.reduce((acc, r) => acc + r.sleep_quality, 0) / dadosComHoras.length
-
-      // Calcular consistência (baseada na variação dos horários)
-      const horariosDormir = dadosComHoras.map(r => timeStringToMinutes(r.bedtime))
-      const horariosAcordar = dadosComHoras.map(r => timeStringToMinutes(r.wake_time))
-      
-      const variancaDormir = calcularVariancia(horariosDormir)
-      const variancaAcordar = calcularVariancia(horariosAcordar)
-      const consistencia = Math.max(0, 100 - (variancaDormir + variancaAcordar) / 120) // Normalizado para 0-100%
-
-      // Encontrar melhor e pior dia
-      const melhorRegistro = dadosComHoras.reduce((max, r) => r.sleep_quality > max.sleep_quality ? r : max)
-      const piorRegistro = dadosComHoras.reduce((min, r) => r.sleep_quality < min.sleep_quality ? r : min)
-
-      // Horários mais comuns
-      const horaIdealDormir = calcularModa(dadosComHoras.map(r => r.bedtime))
-      const horaIdealAcordar = calcularModa(dadosComHoras.map(r => r.wake_time))
-
-      // Criar mapa de registros por dia
-      const registrosPorDia: EstatisticasSono['registrosPorDia'] = {}
-      dadosComHoras.forEach(registro => {
-        const dia = new Date(registro.date).toLocaleDateString('pt-BR', { weekday: 'long' })
-        registrosPorDia[dia] = {
-          horas: registro.horasSono,
-          qualidade: registro.sleep_quality,
-          horaDormir: registro.bedtime,
-          horaAcordar: registro.wake_time
-        }
-      })
-
-      // Calcular tendências (comparar primeira metade com segunda metade)
-      const metade = Math.floor(dadosComHoras.length / 2)
-      const primeiraMetade = dadosComHoras.slice(-metade)
-      const segundaMetade = dadosComHoras.slice(0, metade)
-
-      const mediaHorasPrimeira = primeiraMetade.reduce((acc, r) => acc + r.horasSono, 0) / primeiraMetade.length
-      const mediaHorasSegunda = segundaMetade.reduce((acc, r) => acc + r.horasSono, 0) / segundaMetade.length
-
-      const mediaQualidadePrimeira = primeiraMetade.reduce((acc, r) => acc + r.sleep_quality, 0) / primeiraMetade.length
-      const mediaQualidadeSegunda = segundaMetade.reduce((acc, r) => acc + r.sleep_quality, 0) / segundaMetade.length
-
-      const tendenciaHoras = mediaHorasSegunda > mediaHorasPrimeira + 0.5 ? 'aumentando' : 
-                            mediaHorasSegunda < mediaHorasPrimeira - 0.5 ? 'diminuindo' : 'estavel'
-      
-      const tendenciaQualidade = mediaQualidadeSegunda > mediaQualidadePrimeira + 0.5 ? 'melhorando' : 
-                                mediaQualidadeSegunda < mediaQualidadePrimeira - 0.5 ? 'piorando' : 'estavel'
-
-      const estatisticasCalculadas: EstatisticasSono = {
-        mediaHorasSono: Math.round(mediaHorasSono * 10) / 10,
-        mediaQualidade: Math.round(mediaQualidade * 10) / 10,
-        consistencia: Math.round(consistencia),
-        totalRegistros: registrosRecentes.length,
-        tendenciaHoras,
-        tendenciaQualidade,
-        registrosPorDia,
-        melhorDia: new Date(melhorRegistro.date).toLocaleDateString('pt-BR', { weekday: 'long' }),
-        piorDia: new Date(piorRegistro.date).toLocaleDateString('pt-BR', { weekday: 'long' }),
-        horaIdealDormir,
-        horaIdealAcordar
-      }
-
-      setEstatisticas(estatisticasCalculadas)
-      return estatisticasCalculadas
-    } catch (error) {
-      console.error("Erro ao calcular estatísticas:", error)
-      return null
-    }
-  }
-
   // Carregar configuração de lembretes
-  const carregarLembretes = async () => {
+  const carregarLembretes = useCallback(async () => {
     if (!user) return
 
     try {
@@ -328,7 +247,7 @@ export function useSono() {
     } catch (error) {
       console.error("Erro ao carregar lembretes:", error)
     }
-  }
+  }, [user, supabase])
 
   // Excluir registro de sono
   const excluirRegistroSono = async (id: string) => {
@@ -359,14 +278,7 @@ export function useSono() {
       fetchRegistrosSono()
       carregarLembretes()
     }
-  }, [user])
-
-  // Recalcular estatísticas quando registros mudarem
-  useEffect(() => {
-    if (registrosSono.length > 0) {
-      calcularEstatisticas()
-    }
-  }, [registrosSono])
+  }, [user, fetchRegistrosSono, carregarLembretes])
 
   return {
     registrosSono,
@@ -380,51 +292,4 @@ export function useSono() {
     carregarLembretes,
     excluirRegistroSono
   }
-}
-
-// Funções auxiliares
-function calcularHorasSono(bedtime: string, wakeTime: string): number {
-  const [bedH, bedM] = bedtime.split(':').map(Number)
-  const [wakeH, wakeM] = wakeTime.split(':').map(Number)
-
-  const bedMinutes = bedH * 60 + bedM
-  let wakeMinutes = wakeH * 60 + wakeM
-
-  // Se wake time é menor que bedtime, passou da meia-noite
-  if (wakeMinutes < bedMinutes) {
-    wakeMinutes += 24 * 60
-  }
-
-  return (wakeMinutes - bedMinutes) / 60
-}
-
-function timeStringToMinutes(time: string): number {
-  const [hours, minutes] = time.split(':').map(Number)
-  return hours * 60 + minutes
-}
-
-function calcularVariancia(values: number[]): number {
-  const mean = values.reduce((acc, val) => acc + val, 0) / values.length
-  const variance = values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / values.length
-  return Math.sqrt(variance)
-}
-
-function calcularModa(values: string[]): string | null {
-  const frequency: { [key: string]: number } = {}
-  
-  values.forEach(val => {
-    frequency[val] = (frequency[val] || 0) + 1
-  })
-
-  let maxFreq = 0
-  let mode = null
-
-  for (const [value, freq] of Object.entries(frequency)) {
-    if (freq > maxFreq) {
-      maxFreq = freq
-      mode = value
-    }
-  }
-
-  return mode
 }
